@@ -1,8 +1,3 @@
-// app/(tabs)/_layout.tsx
-export const unstable_settings = {
-    skipLegacyRedirects: true,
-};
-
 import { Tabs } from "expo-router";
 
 export default function TabsLayout() {
