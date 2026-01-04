@@ -1,13 +1,12 @@
 {
   "expo": {
-    "name": "chessapp-mobile",
-    "slug": "chessapp-mobile",
+    "name": "chessapp",
+    "slug": "chessapp",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "chessapp",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.yourname.chessappmobile",

@@ -1,3 +1,5 @@
+// chess/chessapp/lib/api.ts
+
 export async function loginWithGoogle(accessToken: string) {
     const res = await fetch("http://localhost:3000/auth/google", {
         method: "POST",

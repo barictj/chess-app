@@ -1,17 +1,25 @@
-// chess/chessapp/app/index.tsx
+// chess/chessapp/app/auth.tsx
 
 import { useEffect } from "react";
-import { View, ActivityIndicator } from "react-native";
+import { ActivityIndicator, View } from "react-native";
 import { router } from "expo-router";
-import { getToken } from "../lib/token";
+import { getToken } from "../lib/token"; // adjust path if needed
 
-export default function Index() {
+export default function AuthRedirect() {
     useEffect(() => {
+        let mounted = true;
+
         (async () => {
             const token = await getToken();
-            console.log("JWT:", token);
+
+            if (!mounted) return;
+
             router.replace(token ? "/(tabs)" : "/(auth)/login");
         })();
+
+        return () => {
+            mounted = false;
+        };
     }, []);
 
     return (

@@ -1,3 +1,5 @@
+// chess/chessapp/app/modal.tsx
+
 import { View, Text } from "react-native";
 
 export default function ModalScreen() {

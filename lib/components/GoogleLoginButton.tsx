@@ -1,8 +1,8 @@
 import { Button } from "react-native";
 import { useEffect } from "react";
-import { useGoogleLogin } from "../auth/useGoogleLogin";
-import { loginWithGoogle } from "../auth/api";
-import { saveToken } from "../auth/token";
+import { useGoogleLogin } from "../useGoogleLogin";
+import { loginWithGoogle } from "../api";
+import { saveToken } from "../token";
 
 export function GoogleLoginButton({ onLoggedIn }: { onLoggedIn: () => void }) {
     const { request, response, promptAsync } = useGoogleLogin();
