@@ -7,9 +7,9 @@ export default function Index() {
     useEffect(() => {
         getToken().then(token => {
             if (token) {
-                router.replace("/home");
+                router.replace({ pathname: "/(tabs)" });
             } else {
-                router.replace("/login");
+                router.replace({ pathname: "/(auth)/login" });
             }
         });
     }, []);
