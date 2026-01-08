@@ -16,6 +16,8 @@
       }
     },
     "android": {
+      "compileSdkVersion": 36,
+      "targetSdkVersion": 36,
       "package": "com.yourname.chessappmobile",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
