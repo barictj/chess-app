@@ -7,7 +7,7 @@ import { Chess } from "chess.js";
 import { getUserIdFromToken } from "../../lib/auth";
 import { resignGame, rematchGame } from "../../lib/api";
 import { router } from "expo-router";
-import Chessboard from "dawikk-chessboard";
+import Chessboard from "react-native-chessboardjs";
 
 const BACKEND_URL = Constants.expoConfig?.extra?.BACKEND_URL;
 
@@ -125,6 +125,24 @@ export default function GameScreen() {
     }
   }
 
+  function findMoveFromFenChange(prevFen: string, nextFen: string) {
+    const chess = new Chess(prevFen === "startpos" ? undefined : prevFen);
+
+    const moves = chess.moves({ verbose: true }) as any[];
+    for (const m of moves) {
+      const test = new Chess(prevFen === "startpos" ? undefined : prevFen);
+      test.move(m);
+      if (test.fen() === nextFen) {
+        return {
+          from: m.from as string,
+          to: m.to as string,
+          promotion: m.promotion as string | undefined,
+        };
+      }
+    }
+    return null;
+  }
+
   async function resign() {
     Alert.alert("Resign game?", "Are you sure you want to resign?", [
       { text: "Cancel", style: "cancel" },
@@ -232,13 +250,6 @@ export default function GameScreen() {
       : myColor === "b"
         ? game.white_username
         : null;
-  const opponentIdStr = !game
-    ? null
-    : myColor === "w"
-      ? String(game.black_user_id)
-      : myColor === "b"
-        ? String(game.white_user_id)
-        : null;
   React.useEffect(() => {
     if (!game?.fen || !myColor) return;
 
@@ -276,15 +287,15 @@ export default function GameScreen() {
       },
     ]);
   }, [game?.status]);
-  // put near your other consts
-  const START_FEN = React.useMemo(() => new Chess().fen(), []);
-  const boardFen = game?.fen && game.fen !== "startpos" ? game.fen : START_FEN;
-
+  const pos = game?.fen && game.fen !== "startpos" ? game.fen : "start";
+  const START_FEN = new Chess().fen();
+  const BOARD = 360;
+  const position = game?.fen && game.fen !== "startpos" ? game.fen : START_FEN;
   return (
     <View style={{ padding: 12, gap: 10 }}>
       <Text style={{ fontSize: 18, fontWeight: "600" }}>Game {id}</Text>
       <Text>Opponent: {opponentUsername ?? "(unknown)"}</Text>
-      <Text>Opponent ID: {opponentIdStr ?? "(unknown)"}</Text>
+
       {err ? <Text>Error: {err}</Text> : null}
       {!game ? <Text>Loading…</Text> : null}
 
@@ -320,43 +331,36 @@ export default function GameScreen() {
               }}
                 
             /> */}
+
             <View
-              style={{ width: "100%", aspectRatio: 1, alignSelf: "center" }}
+              style={{
+                width: BOARD + 40,
+                height: BOARD + 40,
+                backgroundColor: "pink",
+                overflow: "hidden",
+              }}
             >
               <Chessboard
-                fen={boardFen}
-                perspective={myColor === "b" ? "black" : "white"}
-                showCoordinates={false}
-                lastMoveFrom={lastMove?.from ?? undefined}
-                lastMoveTo={lastMove?.to ?? undefined}
-                onMove={(from, to, promotion) => {
-                  if (!isMyTurn || isGameOver) return;
+                size={{ width: BOARD + 40, height: BOARD + 40 }}
+                position={"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"}
+                boardOrientation="white"
+                onSquareClick={() => true}
+                isDraggablePiece={({ piece }) => true}
+                onPieceDrop={() => true}
+              />
+            </View>
 
-                  // validate locally so you don’t send trash
-                  const test = new Chess(boardFen);
-                  const m = test.move({
-                    from,
-                    to,
-                    promotion: promotion as any,
-                  });
-                  if (!m) return;
-
-                  sendMove(from, to, m.promotion);
+            {(!isMyTurn || isGameOver) && (
+              <Pressable
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
                 }}
               />
-
-              {(!isMyTurn || isGameOver) && (
-                <Pressable
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                  }}
-                />
-              )}
-            </View>
+            )}
           </View>
 
           {!isGameOver && <Button title="Resign Game" onPress={resign} />}
