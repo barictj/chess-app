@@ -5,7 +5,6 @@ import { View, ActivityIndicator } from "react-native";
 import { router } from "expo-router";
 import { getToken } from "../lib/token";
 export default function Index() {
-  console.log("Index screen loaded");
   useEffect(() => {
     (async () => {
       const token = await getToken();

@@ -10,8 +10,6 @@ import Constants from "expo-constants";
 WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
-  console.log("LOGIN SCREEN RENDERED");
-
   const { token } = useLocalSearchParams<{ token?: string }>();
 
   // Handle token if present in params

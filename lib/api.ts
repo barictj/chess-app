@@ -37,7 +37,7 @@ export async function getActiveGames() {
 
   return JSON.parse(text);
 }
-export async function findRandomGame(opponentUsername: string) {
+export async function findRandomGame() {
   const token = await getToken();
   if (!token) throw new Error("Not authenticated");
   const res = await fetch(`${BACKEND_URL}/api/games/random`, {
@@ -46,7 +46,6 @@ export async function findRandomGame(opponentUsername: string) {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ opponent_username: opponentUsername }),
   });
 
   if (!res.ok) {
@@ -84,4 +83,54 @@ export async function setUsername(username: string) {
   const text = await res.text();
   if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
   return JSON.parse(text);
+}
+export async function playAgainstBot() {
+  const token = await getToken();
+  if (!token) throw new Error("Not authenticated");
+  const res = await fetch(`${BACKEND_URL}/api/games/play_bot`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || "Failed to create game against bot");
+  }
+  return res.json();
+}
+export async function resignGame(gameId: string) {
+  const token = await getToken();
+  if (!token) throw new Error("Not authenticated");
+  const res = await fetch(`${BACKEND_URL}/api/games/${gameId}/resign`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ gameId: gameId }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || "Failed to resign game");
+  }
+  return res.json();
+}
+export async function rematchGame(gameId: string) {
+  const token = await getToken();
+  if (!token) throw new Error("Not authenticated");
+  const res = await fetch(`${BACKEND_URL}/api/games/${gameId}/rematch`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ gameId: gameId }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || "Failed to request rematch");
+  }
+  return res.json();
 }

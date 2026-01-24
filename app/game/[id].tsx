@@ -1,12 +1,13 @@
 import React from "react";
-import { View, Text } from "react-native";
+import { View, Text, Button, Alert, Pressable } from "react-native";
 import { useLocalSearchParams, useFocusEffect } from "expo-router";
 import Constants from "expo-constants";
 import { getToken } from "../../lib/token";
-import Chessboard from "react-native-chessboard";
 import { Chess } from "chess.js";
 import { getUserIdFromToken } from "../../lib/auth";
-import type { ChessboardRef } from "react-native-chessboard";
+import { resignGame, rematchGame } from "../../lib/api";
+import { router } from "expo-router";
+import Chessboard from "react-native-chessboard";
 
 const BACKEND_URL = Constants.expoConfig?.extra?.BACKEND_URL;
 
@@ -15,7 +16,9 @@ function makeRequestId() {
 }
 
 export default function GameScreen() {
+  console.log("BACKEND_URL =", BACKEND_URL);
   const { id } = useLocalSearchParams<{ id: string }>();
+  const [showCastleTip, setShowCastleTip] = React.useState(false);
 
   const [game, setGame] = React.useState<any>(null);
   const [err, setErr] = React.useState<string | null>(null);
@@ -33,8 +36,6 @@ export default function GameScreen() {
 
   // Prevent double-sends if something weird happens
   const sendingRef = React.useRef(false);
-
-  const boardRef = React.useRef<ChessboardRef | null>(null);
 
   const loadGame = React.useCallback(async () => {
     const token = await getToken();
@@ -72,17 +73,6 @@ export default function GameScreen() {
       }
     })();
   }, [loadGame]);
-  React.useEffect(() => {
-    if (!game?.fen || !lastMove) return;
-
-    // give the board a tick to mount/update
-    const t = setTimeout(() => {
-      boardRef.current?.highlight({ square: lastMove.from as any });
-      boardRef.current?.highlight({ square: lastMove.to as any });
-    }, 0);
-
-    return () => clearTimeout(t);
-  }, [game?.fen, lastMove]);
 
   async function sendMove(from: string, to: string, promotion?: string) {
     if (sendingRef.current) return;
@@ -134,24 +124,6 @@ export default function GameScreen() {
       sendingRef.current = false;
     }
   }
-  React.useEffect(() => {
-    if (!game?.fen) return;
-
-    const fen = game.fen === "startpos" ? undefined : game.fen;
-
-    // resetBoard updates pieces AND clears previous highlights
-    const t = setTimeout(() => {
-      boardRef.current?.resetBoard?.(fen as any);
-
-      // re-apply last move highlight after reset
-      if (lastMove) {
-        boardRef.current?.highlight?.({ square: lastMove.from as any });
-        boardRef.current?.highlight?.({ square: lastMove.to as any });
-      }
-    }, 0);
-
-    return () => clearTimeout(t);
-  }, [game?.fen, lastMove]);
 
   function findMoveFromFenChange(prevFen: string, nextFen: string) {
     const chess = new Chess(prevFen === "startpos" ? undefined : prevFen);
@@ -171,6 +143,34 @@ export default function GameScreen() {
     return null;
   }
 
+  async function resign() {
+    Alert.alert("Resign game?", "Are you sure you want to resign?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Resign",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            setErr(null);
+            await resignGame(String(id));
+            await loadGame();
+          } catch (e: any) {
+            setErr(e?.message ?? String(e));
+          }
+        },
+      },
+    ]);
+  }
+  async function rematch() {
+    try {
+      setErr(null);
+      const newGame = await rematchGame(String(id));
+      // Navigate to new game
+      router.replace(`/game/${newGame.id}`);
+    } catch (e: any) {
+      setErr(e?.message ?? String(e));
+    }
+  }
   // Poll while focused
   useFocusEffect(
     React.useCallback(() => {
@@ -250,6 +250,43 @@ export default function GameScreen() {
       : myColor === "b"
         ? game.white_username
         : null;
+  React.useEffect(() => {
+    if (!game?.fen || !myColor) return;
+
+    const chess = new Chess(game.fen === "startpos" ? undefined : game.fen);
+    const kingSq = myColor === "w" ? "e1" : "e8";
+    const moves = chess.moves({ square: kingSq, verbose: true }) as any[];
+
+    const canCastle = moves.some(
+      (m) => m.flags?.includes("k") || m.flags?.includes("q"),
+    );
+
+    if (canCastle) setShowCastleTip(true);
+  }, [game?.fen, myColor]);
+  console.log("Rendering game:", game);
+  const isGameOver = game?.status === "completed";
+  const winner = isGameOver ? game?.result : null;
+  const rematchPromptedRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!game) return;
+    if (game.status !== "completed") return;
+    if (rematchPromptedRef.current) return;
+
+    rematchPromptedRef.current = true;
+    Alert.alert("Game over", "Rematch?", [
+      {
+        text: "No",
+        style: "cancel",
+      },
+      {
+        text: "Yes",
+        onPress: async () => {
+          await rematch();
+        },
+      },
+    ]);
+  }, [game?.status]);
 
   return (
     <View style={{ padding: 12, gap: 10 }}>
@@ -266,32 +303,53 @@ export default function GameScreen() {
             {game.turn} {isMyTurn ? "(your move)" : "(waiting)"}
           </Text>
           <Text>Last move: {game.last_move_san ?? "(none)"}</Text>
-          <Chessboard
-            ref={boardRef}
-            fen={game.fen === "startpos" ? undefined : game.fen}
-            onMove={(info: any) => {
-              if (!game || !myColor) return;
+          {isGameOver && winner && (
+            <>
+              <Text style={{ fontSize: 18, fontWeight: "bold" }}>
+                {winner === "draw"
+                  ? "Draw"
+                  : winner === myColor
+                    ? "You won 🎉"
+                    : "You lost 😔"}
+              </Text>
+            </>
+          )}
 
-              const isMyTurn =
-                (game.turn === "w" && myColor === "w") ||
-                (game.turn === "b" && myColor === "b");
-              if (!isMyTurn) return;
-
-              const from = info?.move?.from;
-              const to = info?.move?.to;
-              const promotion = info?.move?.promotion;
-
-              if (!from || !to) return;
-
-              // optimistic highlight immediately for your move
-
-              sendMove(
-                String(from),
-                String(to),
-                promotion ? String(promotion) : undefined,
-              ).catch((e) => setErr(String(e)));
+          <View
+            style={{
+              position: "relative",
             }}
-          />
+          >
+            <Chessboard
+              fen={game?.fen === "startpos" ? undefined : game?.fen}
+              boardOrientation={myColor === "b" ? "black" : "white"}
+              // orientation={myColor === "b" ? "black" : "white"}
+              onMove={(move: any) => {
+                if (!isMyTurn || isGameOver) return;
+                // react-native-chessboard uses {from, to} (promotion may not exist)
+                sendMove(String(move.from), String(move.to), move.promotion);
+              }}
+            />
+
+            {(!isMyTurn || isGameOver) && (
+              <Pressable
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                }}
+              />
+            )}
+          </View>
+
+          {!isGameOver && <Button title="Resign Game" onPress={resign} />}
+          {showCastleTip && (
+            <Text style={{ fontStyle: "italic" }}>
+              Tip: To castle, drag the king.
+            </Text>
+          )}
         </>
       ) : null}
     </View>
