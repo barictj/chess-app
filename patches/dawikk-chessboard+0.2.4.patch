@@ -1,0 +1,42 @@
+diff --git a/node_modules/dawikk-chessboard/src/components/Chessboard.js b/node_modules/dawikk-chessboard/src/components/Chessboard.js
+index 08a4fc9..a019714 100644
+--- a/node_modules/dawikk-chessboard/src/components/Chessboard.js
++++ b/node_modules/dawikk-chessboard/src/components/Chessboard.js
+@@ -793,9 +793,7 @@ const styles = StyleSheet.create({
+     backgroundColor: 'transparent',
+   },
+   board: {
+-    flex: 1,
+-    flexDirection: 'column',
+-    position: 'relative',
++    flex: 1
+   },
+   boardRow: {
+     flex: 1,
+diff --git a/node_modules/dawikk-chessboard/src/components/Square.js b/node_modules/dawikk-chessboard/src/components/Square.js
+index cabd883..fac3a98 100644
+--- a/node_modules/dawikk-chessboard/src/components/Square.js
++++ b/node_modules/dawikk-chessboard/src/components/Square.js
+@@ -434,10 +434,10 @@ const Square = memo(({
+   return (
+     <SquareWrapper 
+       {...wrapperProps}
+-      style={[
+-        styles.square,
+-        { backgroundColor }
+-      ]}
++        style={[
++    styles.square,
++    { width: '12.5%', height: '100%', backgroundColor, border: '0px !important', margin: -.1},
++  ]}
+     >
+       {/* Only render overlays if they exist */}
+       {overlayStyles.lastMoveFrom && (
+@@ -538,7 +538,6 @@ Square.displayName = 'Square';
+ // *** STYLES ***
+ const styles = StyleSheet.create({
+   square: {
+-    flex: 1,
+     justifyContent: 'center',
+     alignItems: 'center',
+     position: 'relative',

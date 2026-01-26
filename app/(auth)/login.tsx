@@ -1,11 +1,20 @@
 // chess/chessapp/app/(auth)/login.tsx
 import React, { useEffect } from "react";
-import { View, Text, Button, Alert, Platform } from "react-native";
+import {
+  View,
+  Text,
+  Button,
+  Alert,
+  Platform,
+  Pressable,
+  StyleSheet,
+} from "react-native";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import { router, useLocalSearchParams } from "expo-router";
 import { setToken } from "../../lib/token";
 import Constants from "expo-constants";
+import { useTheme } from "../../lib/ThemeContext";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -102,10 +111,102 @@ export default function LoginScreen() {
     }
   }
 
+  const { theme } = useTheme();
+
   return (
-    <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-      <Text>Login</Text>
-      <Button title="Login with Google" onPress={loginWithGoogle} />
+    <View style={[styles.root, { backgroundColor: theme.bg }]}>
+      {/* Card */}
+      <View
+        style={[
+          styles.card,
+          { backgroundColor: theme.card, borderColor: theme.border },
+        ]}
+      >
+        {/* Logo / Title */}
+        <View style={{ alignItems: "center", marginBottom: 24 }}>
+          <Text style={[styles.title, { color: theme.text }]}>dotChess</Text>
+          <Text style={[styles.subtitle, { color: theme.subtext }]}>
+            Play with your friends at your own time.
+          </Text>
+        </View>
+
+        {/* Login button */}
+        <Pressable
+          onPress={loginWithGoogle}
+          style={({ pressed }) => [
+            styles.primaryBtn,
+            {
+              backgroundColor: theme.primary,
+              borderColor: theme.primary,
+            },
+            pressed && styles.pressed,
+          ]}
+        >
+          <Text style={styles.primaryText}>Continue with Google</Text>
+        </Pressable>
+
+        {/* Fine print */}
+        <Text style={[styles.footer, { color: theme.subtext }]}>
+          By continuing, you agree to our Terms & Privacy Policy.
+        </Text>
+      </View>
     </View>
   );
 }
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+  },
+
+  card: {
+    width: "100%",
+    maxWidth: 380,
+    borderRadius: 22,
+    borderWidth: 1,
+    padding: 22,
+  },
+
+  title: {
+    fontSize: 28,
+    fontWeight: "900",
+    letterSpacing: 0.4,
+  },
+
+  subtitle: {
+    marginTop: 6,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+
+  primaryBtn: {
+    marginTop: 10,
+    paddingVertical: 14,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+  },
+
+  primaryText: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "900",
+    letterSpacing: 0.3,
+  },
+
+  footer: {
+    marginTop: 14,
+    textAlign: "center",
+    fontSize: 12,
+    fontWeight: "700",
+    opacity: 0.9,
+  },
+
+  pressed: {
+    transform: [{ scale: 0.99 }],
+    opacity: 0.96,
+  },
+});
