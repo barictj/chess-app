@@ -2,7 +2,7 @@ export default {
   expo: {
     name: "chessapp",
     slug: "chessapp",
-    version: "1.0.1",
+    version: "1.0.2",
     runtimeVersion: "3",
     orientation: "portrait",
     icon: "./assets/images/icon.png",

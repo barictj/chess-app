@@ -1,5 +1,6 @@
 import { getToken } from "./token";
-export const BACKEND_URL = "https://api.dotchess.app";
+import { BACKEND_URL } from "./config";
+
 console.log("Using BACKEND_URL:", BACKEND_URL);
 export async function createGame(opponentUsername: string) {
   const token = await getToken();

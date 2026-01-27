@@ -16,7 +16,7 @@ import { setToken } from "../../lib/token";
 import Constants from "expo-constants";
 import { useTheme } from "../../lib/ThemeContext";
 import * as AppleAuthentication from "expo-apple-authentication";
-
+import { BACKEND_URL } from "../../lib/config";
 WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
@@ -51,13 +51,8 @@ export default function LoginScreen() {
 
   async function loginWithGoogle() {
     try {
-      const backend = Constants.expoConfig?.extra?.BACKEND_URL;
-
-      if (!backend || typeof backend !== "string") {
-        throw new Error(
-          "BACKEND_URL is missing. Check app.json/app.config.js expo.extra.BACKEND_URL and restart expo.",
-        );
-      }
+      const backend = BACKEND_URL;
+      console.log("BACKEND_URL:", backend);
 
       // IMPORTANT: if backend is localhost on a real phone, it will NOT work
       // Example bad: http://localhost:3000
@@ -113,7 +108,7 @@ export default function LoginScreen() {
   }
   async function loginWithApple() {
     try {
-      const backend = Constants.expoConfig?.extra?.BACKEND_URL;
+      const backend = BACKEND_URL;
       if (!backend || typeof backend !== "string") {
         throw new Error(
           "BACKEND_URL is missing. Set EXPO_PUBLIC_BACKEND_URL and restart Expo.",
@@ -169,20 +164,9 @@ export default function LoginScreen() {
         {/* Logo / Title */}
         <View style={{ alignItems: "center", marginBottom: 24 }}>
           <Text style={[styles.title, { color: theme.text }]}>dotChess</Text>
-          <Text
-            style={{
-              position: "absolute",
-              bottom: 6,
-              right: 6,
-              fontSize: 10,
-              opacity: 0.6,
-            }}
-          >
-            BUILD: android-prod-2026-01-27-A
-          </Text>
-
           <Text style={[styles.subtitle, { color: theme.subtext }]}>
-            Play with your friends at your own time.
+            Play Chess with bots, friends, or people around the world at your
+            own pace.
           </Text>
         </View>
 

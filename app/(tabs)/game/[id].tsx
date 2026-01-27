@@ -33,8 +33,7 @@ import { confirm } from "../../compononents/Shared/Confirm";
 
 import { LoadState, msg } from "../../../lib/loadState";
 import { ErrorBanner, SkeletonRow } from "../../compononents/Shared/States";
-
-const BACKEND_URL = Constants.expoConfig?.extra?.BACKEND_URL;
+import { BACKEND_URL } from "../../../lib/config";
 
 function makeRequestId() {
   return `m_${Date.now()}_${Math.random().toString(16).slice(2)}`;
