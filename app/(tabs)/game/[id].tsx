@@ -1,0 +1,1244 @@
+import React from "react";
+import {
+  View,
+  Text,
+  Alert,
+  Pressable,
+  Modal,
+  ScrollView,
+  StyleSheet,
+} from "react-native";
+import { useLocalSearchParams, useFocusEffect } from "expo-router";
+import { router } from "expo-router";
+import Constants from "expo-constants";
+import { Chess } from "chess.js";
+import { useTheme } from "../../../lib/ThemeContext";
+import { getToken } from "../../../lib/token";
+import { getUserIdFromToken } from "../../../lib/auth";
+import {
+  resignGame,
+  rematchGame,
+  offerDraw,
+  respondToDrawOffer,
+  getFriendsList,
+  getIncomingFriendRequests,
+  getOutgoingFriendRequests,
+  requestFriend,
+  acceptFriendRequest,
+  denyFriendRequest,
+} from "../../../lib/api";
+
+import Chessboard from "dawikk-chessboard";
+import { confirm } from "../../compononents/Shared/Confirm";
+
+import { LoadState, msg } from "../../../lib/loadState";
+import { ErrorBanner, SkeletonRow } from "../../compononents/Shared/States";
+
+const BACKEND_URL = Constants.expoConfig?.extra?.BACKEND_URL;
+
+function makeRequestId() {
+  return `m_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+export default function GameScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const { theme, boardTheme } = useTheme();
+
+  const [showCastleTip, setShowCastleTip] = React.useState(false);
+  const [showDrawModal, setShowDrawModal] = React.useState(false);
+  const [showRematch, setShowRematch] = React.useState(false);
+
+  const [myColor, setMyColor] = React.useState<"w" | "b" | null>(null);
+  const [lastMove, setLastMove] = React.useState<{
+    from: string;
+    to: string;
+  } | null>(null);
+
+  // ---- LoadState (single source of truth for loading/error)
+  const [gameS, setGameS] = React.useState<LoadState<any>>({
+    status: "loading",
+    data: null,
+    error: null,
+  });
+  const game = gameS.data;
+
+  // ---- refs you already had
+  const prevFenRef = React.useRef<string>("startpos");
+  const promoPendingRef = React.useRef(false);
+  const lastSeenFenRef = React.useRef<string | null>(null);
+  const sendingRef = React.useRef(false);
+  const rematchPromptedRef = React.useRef(false);
+
+  // ---- busy flags for mutations
+  const [busy, setBusy] = React.useState<{
+    resign?: boolean;
+    rematch?: boolean;
+    offerDraw?: boolean;
+    drawRespond?: boolean;
+    addFriend?: boolean;
+    acceptFriend?: boolean;
+    denyFriend?: boolean;
+  }>({});
+
+  // ---- Friends + requests (ids / usernames from your friends page shapes)
+  const [friendsS, setFriendsS] = React.useState<LoadState<number[]>>({
+    status: "loading",
+    data: [],
+    error: null,
+  });
+
+  const [incomingS, setIncomingS] = React.useState<
+    LoadState<
+      Array<{ from_user_id: number; from_username: string; id: number }>
+    >
+  >({
+    status: "loading",
+    data: [],
+    error: null,
+  });
+
+  const [outgoingS, setOutgoingS] = React.useState<
+    LoadState<Array<{ to_user_id: number; to_username: string; id: number }>>
+  >({
+    status: "loading",
+    data: [],
+    error: null,
+  });
+
+  const loadFriendsBundle = React.useCallback(async () => {
+    try {
+      setFriendsS((s) => ({ ...s, status: "loading", error: null }));
+      setIncomingS((s) => ({ ...s, status: "loading", error: null }));
+      setOutgoingS((s) => ({ ...s, status: "loading", error: null }));
+
+      const [friendsRows, incomingRows, outgoingRows] = await Promise.all([
+        getFriendsList(), // expects [{ id: number }, ...]
+        getIncomingFriendRequests(), // expects [{ from_user_id, from_username, id, created_at }, ...]
+        getOutgoingFriendRequests(), // expects [{ to_user_id, to_username, id, created_at }, ...]
+      ]);
+
+      const friendIds = (friendsRows ?? [])
+        .map((r: any) => Number(r.id))
+        .filter((n: any) => Number.isFinite(n));
+
+      setFriendsS({ status: "ready", data: friendIds, error: null });
+      setIncomingS({
+        status: "ready",
+        data: (incomingRows ?? []) as any,
+        error: null,
+      });
+      setOutgoingS({
+        status: "ready",
+        data: (outgoingRows ?? []) as any,
+        error: null,
+      });
+    } catch (e) {
+      const m = msg(e);
+      setFriendsS(
+        (s) => ({ status: "error", data: s.data ?? [], error: m }) as any,
+      );
+      setIncomingS(
+        (s) => ({ status: "error", data: s.data ?? [], error: m }) as any,
+      );
+      setOutgoingS(
+        (s) => ({ status: "error", data: s.data ?? [], error: m }) as any,
+      );
+    }
+  }, []);
+
+  // ---- load game
+  const loadGame = React.useCallback(async () => {
+    setGameS((s) => ({ ...s, status: "loading", error: null }));
+
+    const token = await getToken();
+    if (!token) throw new Error("No token");
+
+    const myId = getUserIdFromToken(token);
+    if (!myId) throw new Error("Token missing sub");
+
+    const res = await fetch(`${BACKEND_URL}/api/games/${id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    const text = await res.text();
+    if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
+
+    const g = JSON.parse(text);
+
+    setGameS({ status: "ready", data: g, error: null });
+
+    prevFenRef.current = g.fen ?? "startpos";
+    lastSeenFenRef.current = g.fen ?? null;
+
+    if (String(g.white_user_id) === myId) setMyColor("w");
+    else if (String(g.black_user_id) === myId) setMyColor("b");
+    else setMyColor(null);
+
+    if (g.last_move_from && g.last_move_to) {
+      setLastMove({ from: g.last_move_from, to: g.last_move_to });
+    }
+
+    return g;
+  }, [id]);
+
+  React.useEffect(() => {
+    loadGame().catch((e) =>
+      setGameS({ status: "error", data: null, error: msg(e) }),
+    );
+  }, [loadGame]);
+
+  // ---- send move
+  async function sendMove(from: string, to: string, promotion?: string) {
+    if (sendingRef.current) return;
+    sendingRef.current = true;
+
+    try {
+      const token = await getToken();
+      if (!token) throw new Error("No token");
+
+      const res = await fetch(`${BACKEND_URL}/api/games/${id}/move`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          request_id: makeRequestId(),
+          from,
+          to,
+          promotion,
+        }),
+      });
+
+      const text = await res.text();
+      if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
+
+      const data = JSON.parse(text);
+
+      if (data.last_move_from && data.last_move_to) {
+        setLastMove({ from: data.last_move_from, to: data.last_move_to });
+      }
+
+      setGameS((s) => ({
+        status: "ready",
+        error: null,
+        data: {
+          ...(s.data ?? {}),
+          fen: data.fen,
+          pgn: data.pgn,
+          turn: data.turn,
+          status: data.status,
+          result: data.result,
+          last_move_san: data.move?.san,
+          last_move_from: data.last_move_from ?? s.data?.last_move_from ?? null,
+          last_move_to: data.last_move_to ?? s.data?.last_move_to ?? null,
+        },
+      }));
+
+      if (data.fen) {
+        prevFenRef.current = data.fen;
+        lastSeenFenRef.current = data.fen;
+      }
+    } catch (e) {
+      setGameS(
+        (s) => ({ status: "error", data: s.data, error: msg(e) }) as any,
+      );
+    } finally {
+      sendingRef.current = false;
+    }
+  }
+
+  // ---- actions
+  async function resign() {
+    const ok = await confirm({
+      title: "Resign game?",
+      message: "You will forfeit this game.",
+      confirmText: "Resign",
+      destructive: true,
+    });
+    if (!ok) return;
+
+    try {
+      setBusy((b) => ({ ...b, resign: true }));
+      await resignGame(String(id));
+      await loadGame();
+    } catch (e) {
+      setGameS(
+        (s) => ({ status: "error", data: s.data, error: msg(e) }) as any,
+      );
+    } finally {
+      setBusy((b) => ({ ...b, resign: false }));
+    }
+  }
+
+  async function rematch() {
+    try {
+      setBusy((b) => ({ ...b, rematch: true }));
+      const newGame = await rematchGame(String(id));
+      router.replace(`/game/${newGame.id}`);
+    } catch (e) {
+      setGameS(
+        (s) => ({ status: "error", data: s.data, error: msg(e) }) as any,
+      );
+    } finally {
+      setBusy((b) => ({ ...b, rematch: false }));
+    }
+  }
+
+  async function askToDraw() {
+    try {
+      if (!game) return;
+      setBusy((b) => ({ ...b, offerDraw: true }));
+      await offerDraw(String(game.id));
+      await loadGame();
+    } catch (e) {
+      setGameS(
+        (s) => ({ status: "error", data: s.data, error: msg(e) }) as any,
+      );
+    } finally {
+      setBusy((b) => ({ ...b, offerDraw: false }));
+    }
+  }
+
+  async function respondDraw(status: "accepted" | "declined") {
+    try {
+      if (!game) return;
+      setBusy((b) => ({ ...b, drawRespond: true }));
+      await respondToDrawOffer(String(game.id), status === "accepted");
+      setShowDrawModal(false);
+      await loadGame();
+    } catch (e) {
+      setGameS(
+        (s) => ({ status: "error", data: s.data, error: msg(e) }) as any,
+      );
+    } finally {
+      setBusy((b) => ({ ...b, drawRespond: false }));
+    }
+  }
+
+  // ---- polling while focused
+  useFocusEffect(
+    React.useCallback(() => {
+      let alive = true;
+      let timer: any = null;
+
+      async function poll() {
+        try {
+          if (!alive) return;
+          if (!id) return;
+          if (!game) return;
+          if (game.status && game.status !== "active") return;
+
+          const token = await getToken();
+          if (!token) return;
+
+          const res = await fetch(`${BACKEND_URL}/api/games/${id}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+
+          const text = await res.text();
+          if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
+
+          const fresh = JSON.parse(text);
+
+          if (fresh.last_move_from && fresh.last_move_to) {
+            setLastMove({ from: fresh.last_move_from, to: fresh.last_move_to });
+          }
+
+          const fenChanged =
+            !!fresh?.fen && fresh.fen !== lastSeenFenRef.current;
+
+          const offerChanged =
+            fresh.draw_offer_status !== game.draw_offer_status ||
+            String(fresh.draw_offer_by ?? "") !==
+              String(game.draw_offer_by ?? "") ||
+            String(fresh.draw_offer_at ?? "") !==
+              String(game.draw_offer_at ?? "");
+
+          if (fenChanged || offerChanged) {
+            if (fenChanged) {
+              lastSeenFenRef.current = fresh.fen;
+              prevFenRef.current = fresh.fen;
+            }
+            setGameS((s) => ({
+              status: "ready",
+              error: null,
+              data: { ...(s.data ?? {}), ...fresh },
+            }));
+          }
+        } catch (e) {
+          console.log("poll error:", msg(e));
+        } finally {
+          if (!alive) return;
+          timer = setTimeout(poll, 5000);
+        }
+      }
+
+      lastSeenFenRef.current = game?.fen ?? null;
+      timer = setTimeout(poll, 1500);
+
+      return () => {
+        alive = false;
+        if (timer) clearTimeout(timer);
+      };
+    }, [id, game]),
+  );
+
+  // ---- derived values
+  const isGameOver = game?.status === "completed";
+
+  const isMyTurn =
+    !!game &&
+    !!myColor &&
+    ((game.turn === "w" && myColor === "w") ||
+      (game.turn === "b" && myColor === "b"));
+
+  const opponentId = !game
+    ? null
+    : myColor === "w"
+      ? game.black_user_id
+      : myColor === "b"
+        ? game.white_user_id
+        : null;
+
+  const opponentUsername = !game
+    ? null
+    : myColor === "w"
+      ? game.black_username
+      : myColor === "b"
+        ? game.white_username
+        : null;
+
+  const opponentIdStr = opponentId != null ? String(opponentId) : null;
+  const opponentIdNum = opponentIdStr ? Number(opponentIdStr) : null;
+
+  const isFriend =
+    opponentIdNum != null &&
+    (friendsS.data ?? []).some((fid) => Number(fid) === opponentIdNum);
+
+  const incomingReq = opponentIdNum
+    ? (incomingS.data ?? []).find(
+        (r) => Number(r.from_user_id) === opponentIdNum,
+      )
+    : undefined;
+
+  const outgoingReq = opponentIdNum
+    ? (outgoingS.data ?? []).find((r) => Number(r.to_user_id) === opponentIdNum)
+    : undefined;
+
+  // Load friends/requests when screen focused + when opponent changes
+  useFocusEffect(
+    React.useCallback(() => {
+      loadFriendsBundle();
+    }, [loadFriendsBundle, opponentIdStr]),
+  );
+
+  const isOpponentDrawPending =
+    !!game &&
+    game.draw_offer_status === "pending" &&
+    game.draw_offer_by != null &&
+    myColor != null &&
+    String(game.draw_offer_by) === String(opponentId);
+
+  React.useEffect(() => {
+    setShowDrawModal(!!isOpponentDrawPending);
+  }, [isOpponentDrawPending]);
+
+  React.useEffect(() => {
+    if (!game) return;
+    if (game.status !== "completed") return;
+    if (rematchPromptedRef.current) return;
+
+    rematchPromptedRef.current = true;
+    setShowRematch(true);
+  }, [game?.status]);
+
+  // board fen
+  const START_FEN = React.useMemo(() => new Chess().fen(), []);
+  const boardFen = game?.fen && game.fen !== "startpos" ? game.fen : START_FEN;
+
+  function since(ts?: string) {
+    if (!ts) return "—";
+    const diffMs = Date.now() - new Date(ts).getTime();
+    const totalMins = Math.floor(diffMs / 60000);
+    const hours = Math.floor(totalMins / 60);
+    const mins = totalMins % 60;
+    if (hours > 0) return `${hours}h ${mins}m ago`;
+    return `${mins}m ago`;
+  }
+
+  // Friend CTA state
+  type FriendCta =
+    | { kind: "none" }
+    | { kind: "incoming"; from_user_id: number; from_username: string }
+    | { kind: "outgoing"; to_username: string }
+    | { kind: "canAdd"; username: string };
+
+  const friendCta: FriendCta = (() => {
+    if (!opponentUsername || opponentIdNum == null) return { kind: "none" };
+    if (isFriend) return { kind: "none" };
+    if (incomingReq)
+      return {
+        kind: "incoming",
+        from_user_id: incomingReq.from_user_id,
+        from_username: incomingReq.from_username,
+      };
+    if (outgoingReq)
+      return { kind: "outgoing", to_username: outgoingReq.to_username };
+    return { kind: "canAdd", username: opponentUsername };
+  })();
+
+  async function addFriend() {
+    if (!opponentUsername) return;
+    try {
+      setBusy((b) => ({ ...b, addFriend: true }));
+      await requestFriend(opponentUsername);
+      await loadFriendsBundle();
+    } catch (e) {
+      Alert.alert("Error", msg(e));
+    } finally {
+      setBusy((b) => ({ ...b, addFriend: false }));
+    }
+  }
+
+  async function acceptIncoming(from_user_id: number, from_username: string) {
+    const ok = await confirm({
+      title: "Accept friend request",
+      message: `Accept friend request from ${from_username}?`,
+      confirmText: "Accept",
+    });
+    if (!ok) return;
+
+    try {
+      setBusy((b) => ({ ...b, acceptFriend: true }));
+      await acceptFriendRequest(from_user_id);
+      await loadFriendsBundle();
+    } catch (e) {
+      Alert.alert("Error", msg(e));
+    } finally {
+      setBusy((b) => ({ ...b, acceptFriend: false }));
+    }
+  }
+
+  async function denyIncoming(from_user_id: number, from_username: string) {
+    const ok = await confirm({
+      title: "Deny friend request",
+      message: `Deny friend request from ${from_username}?`,
+      confirmText: "Deny",
+      destructive: true,
+    });
+    if (!ok) return;
+
+    try {
+      setBusy((b) => ({ ...b, denyFriend: true }));
+      await denyFriendRequest(from_user_id);
+      await loadFriendsBundle();
+    } catch (e) {
+      Alert.alert("Error", msg(e));
+    } finally {
+      setBusy((b) => ({ ...b, denyFriend: false }));
+    }
+  }
+
+  return (
+    <View style={{ flex: 1, backgroundColor: theme.bg }}>
+      {/* Top bar */}
+      <View
+        style={{
+          backgroundColor: "#1C2330",
+          paddingHorizontal: 12,
+          paddingVertical: 10,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 10,
+          borderBottomWidth: 1,
+          borderBottomColor: "rgba(255,255,255,0.10)",
+        }}
+      >
+        <Pressable
+          onPress={() => router.back()}
+          style={{
+            width: 40,
+            height: 36,
+            borderRadius: 12,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Text style={{ color: "#fff", fontSize: 26, fontWeight: "900" }}>
+            ‹
+          </Text>
+        </Pressable>
+
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text
+            style={{ color: "#fff", fontSize: 18, fontWeight: "900" }}
+            numberOfLines={1}
+          >
+            {opponentUsername ?? "Game"}
+          </Text>
+          <Text
+            style={{
+              color: "rgba(255,255,255,0.70)",
+              fontSize: 12,
+              fontWeight: "800",
+              marginTop: 2,
+            }}
+            numberOfLines={1}
+          >
+            {isGameOver
+              ? "Game over"
+              : isMyTurn
+                ? "Your move"
+                : "Waiting for opponent"}
+          </Text>
+        </View>
+
+        <View
+          style={{
+            paddingVertical: 6,
+            paddingHorizontal: 10,
+            borderRadius: 999,
+            backgroundColor: "rgba(255,255,255,0.10)",
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.12)",
+          }}
+        >
+          <Text style={{ color: "#fff", fontWeight: "900" }}>#{id}</Text>
+        </View>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={{ padding: 14, paddingBottom: 26, gap: 12 }}
+      >
+        {gameS.status === "error" ? (
+          <ErrorBanner text={gameS.error} onRetry={loadGame} />
+        ) : null}
+        {gameS.status === "loading" ? <SkeletonRow /> : null}
+
+        {!game ? null : (
+          <>
+            {/* Status card */}
+            <View
+              style={{
+                backgroundColor: theme.card,
+                borderColor: theme.border,
+                borderWidth: 1,
+                borderRadius: 16,
+                padding: 12,
+              }}
+            >
+              {/* chips */}
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                {isGameOver ? (
+                  <Text
+                    style={{
+                      marginTop: 10,
+                      fontSize: 18,
+                      fontWeight: "900",
+                      color: theme.text,
+                    }}
+                  >
+                    {game.result === "draw"
+                      ? "Draw"
+                      : game.result === myColor
+                        ? "You won 🎉"
+                        : "You lost 😔"}
+                  </Text>
+                ) : (
+                  <View
+                    style={{
+                      marginTop: 16,
+                      alignSelf: "flex-start",
+                      paddingVertical: 6,
+                      paddingHorizontal: 12,
+                      borderRadius: 999,
+                      backgroundColor: isMyTurn
+                        ? theme.primary
+                        : "rgba(248, 244, 28, 0.77)",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: isMyTurn ? "#fff" : "rgba(44, 44, 26, 0.55)",
+                        fontWeight: "900",
+                        fontSize: 14,
+                        letterSpacing: 0.2,
+                      }}
+                    >
+                      {isMyTurn ? "YOUR TURN" : "WAITING ON OPPONENT"}
+                    </Text>
+                  </View>
+                )}
+                <View
+                  style={{
+                    flex: 1,
+                    borderRadius: 14,
+                    padding: 10,
+                    backgroundColor: "rgba(0,0,0,0.04)",
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "900",
+                      color: theme.text,
+                    }}
+                  >
+                    You
+                  </Text>
+                  <Text
+                    style={{
+                      marginTop: 4,
+                      fontSize: 16,
+                      fontWeight: "900",
+                      color: theme.text,
+                    }}
+                  >
+                    {myColor === "w"
+                      ? "White"
+                      : myColor === "b"
+                        ? "Black"
+                        : "—"}
+                  </Text>
+                </View>
+                <View
+                  style={{
+                    flex: 1,
+                    borderRadius: 14,
+                    padding: 10,
+                    backgroundColor: "rgba(0,0,0,0.04)",
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "900",
+                      color: theme.text,
+                    }}
+                  >
+                    Turn
+                  </Text>
+                  <Text
+                    style={{
+                      marginTop: 4,
+                      fontSize: 16,
+                      fontWeight: "900",
+                      color: theme.text,
+                    }}
+                  >
+                    {game.turn === "w"
+                      ? "White"
+                      : game.turn === "b"
+                        ? "Black"
+                        : "—"}
+                  </Text>
+                </View>
+              </View>
+              <Text style={{ marginTop: 12, fontSize: 14, color: theme.text }}>
+                Last move:
+              </Text>
+              <Text
+                style={{ marginTop: 10, fontWeight: "800", color: theme.text }}
+              >
+                <Text style={{ fontWeight: "900" }}>
+                  {game.last_move_san ?? "—"}
+                </Text>
+              </Text>
+            </View>
+
+            {/* Board card */}
+            <View
+              style={{
+                backgroundColor: theme.card,
+                borderColor: theme.border,
+                borderWidth: 1,
+                borderRadius: 18,
+                padding: 0,
+              }}
+            >
+              <View style={{ width: "100%", aspectRatio: 1, padding: 0 }}>
+                <Chessboard
+                  fen={boardFen}
+                  boardTheme={boardTheme}
+                  perspective={myColor === "b" ? "black" : "white"}
+                  showCoordinates={false}
+                  highlightedSquares={[
+                    {
+                      square: game.last_move_from,
+                      color: "rgba(255,215,0,0.45)",
+                    },
+                    {
+                      square: game.last_move_to,
+                      color: "rgba(255,215,0,0.45)",
+                    },
+                  ].filter((x) => x.square)}
+                  lastMoveFrom={game.last_move_from ?? undefined}
+                  lastMoveTo={game.last_move_to ?? undefined}
+                  onMove={(from, to, promotion) => {
+                    if (!isMyTurn || isGameOver) return;
+
+                    const chess = new Chess(boardFen);
+                    const m = chess.move({
+                      from,
+                      to,
+                      promotion: promotion as any,
+                    });
+                    if (!m) return;
+
+                    const nextFen = chess.fen();
+                    const nextTurn = chess.turn();
+
+                    setGameS((s) => ({
+                      status: "ready",
+                      error: null,
+                      data: {
+                        ...(s.data ?? {}),
+                        fen: nextFen,
+                        turn: nextTurn,
+                        last_move_from: m.from,
+                        last_move_to: m.to,
+                      },
+                    }));
+
+                    setLastMove({ from: m.from, to: m.to });
+                    sendMove(m.from, m.to, (m as any).promotion);
+                  }}
+                />
+
+                {(!isMyTurn || isGameOver || promoPendingRef.current) && (
+                  <Pressable
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                    }}
+                  />
+                )}
+              </View>
+            </View>
+
+            {/* Actions */}
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              {!isGameOver ? (
+                <>
+                  <Pressable
+                    onPress={resign}
+                    disabled={!!busy.resign}
+                    style={({ pressed }) => [
+                      {
+                        flex: 1,
+                        paddingVertical: 12,
+                        borderRadius: 16,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        borderWidth: 1,
+                        borderColor: "#E5484D",
+                        backgroundColor: "#E5484D",
+                        opacity: busy.resign ? 0.55 : 1,
+                      },
+                      pressed && !busy.resign
+                        ? { transform: [{ scale: 0.99 }], opacity: 0.97 }
+                        : null,
+                    ]}
+                  >
+                    <Text style={{ color: "#fff", fontWeight: "900" }}>
+                      {busy.resign ? "Resigning…" : "Resign"}
+                    </Text>
+                  </Pressable>
+
+                  {game.draw_offer_status == null ? (
+                    <Pressable
+                      onPress={askToDraw}
+                      disabled={!!busy.offerDraw}
+                      style={({ pressed }) => [
+                        {
+                          flex: 1,
+                          paddingVertical: 12,
+                          borderRadius: 16,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          borderWidth: 1,
+                          borderColor: "rgba(255,255,255,0.14)",
+                          backgroundColor: "#1C2330",
+                          opacity: busy.offerDraw ? 0.55 : 1,
+                        },
+                        pressed && !busy.offerDraw
+                          ? { transform: [{ scale: 0.99 }], opacity: 0.97 }
+                          : null,
+                      ]}
+                    >
+                      <Text style={{ color: "#fff", fontWeight: "900" }}>
+                        {busy.offerDraw ? "Offering…" : "Offer Draw"}
+                      </Text>
+                    </Pressable>
+                  ) : (
+                    <View
+                      style={{
+                        flex: 1,
+                        paddingVertical: 12,
+                        borderRadius: 16,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        borderWidth: 1,
+                        borderColor: theme.border,
+                        backgroundColor: theme.card,
+                      }}
+                    >
+                      <Text style={{ color: theme.subtext, fontWeight: "900" }}>
+                        Draw sent
+                      </Text>
+                    </View>
+                  )}
+                </>
+              ) : (
+                <Pressable
+                  onPress={rematch}
+                  disabled={!!busy.rematch}
+                  style={({ pressed }) => [
+                    {
+                      flex: 1,
+                      paddingVertical: 12,
+                      borderRadius: 16,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderWidth: 1,
+                      borderColor: theme.primary,
+                      backgroundColor: theme.primary,
+                      opacity: busy.rematch ? 0.55 : 1,
+                    },
+                    pressed && !busy.rematch
+                      ? { transform: [{ scale: 0.99 }], opacity: 0.97 }
+                      : null,
+                  ]}
+                >
+                  <Text style={{ color: "#fff", fontWeight: "900" }}>
+                    {busy.rematch ? "Rematching…" : "Rematch"}
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+
+            {/* Friend Request CTA (bottom) */}
+            {friendCta.kind === "outgoing" ? (
+              <View
+                style={{
+                  paddingVertical: 12,
+                  borderRadius: 16,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  backgroundColor: theme.card,
+                }}
+              >
+                <Text style={{ color: theme.subtext, fontWeight: "900" }}>
+                  Friend request sent
+                </Text>
+              </View>
+            ) : friendCta.kind === "canAdd" ? (
+              <Pressable
+                onPress={addFriend}
+                disabled={!!busy.addFriend}
+                style={({ pressed }) => [
+                  {
+                    paddingVertical: 12,
+                    borderRadius: 16,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderWidth: 1,
+                    borderColor: "rgba(255,255,255,0.14)",
+                    backgroundColor: "#1C2330",
+                    opacity: busy.addFriend ? 0.55 : 1,
+                  },
+                  pressed && !busy.addFriend
+                    ? { transform: [{ scale: 0.99 }], opacity: 0.97 }
+                    : null,
+                ]}
+              >
+                <Text style={{ color: "#fff", fontWeight: "900" }}>
+                  {busy.addFriend ? "Adding…" : `Add ${friendCta.username}`}
+                </Text>
+              </Pressable>
+            ) : friendCta.kind === "incoming" ? (
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <View
+                  style={{
+                    paddingVertical: 12,
+                    paddingHorizontal: 12,
+                    borderRadius: 16,
+                    borderWidth: 1,
+                    borderColor: theme.border,
+                    backgroundColor: theme.card,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: theme.text,
+                      fontWeight: "900",
+                      fontSize: 16,
+                    }}
+                    numberOfLines={2}
+                  >
+                    {friendCta.from_username} has sent you a friend request{" "}
+                    <Text
+                      style={{
+                        color: "#E5484D",
+                        fontWeight: "900",
+                        fontSize: 18,
+                      }}
+                    >
+                      !
+                    </Text>
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() =>
+                    denyIncoming(
+                      friendCta.from_user_id,
+                      friendCta.from_username,
+                    )
+                  }
+                  disabled={!!busy.denyFriend || !!busy.acceptFriend}
+                  style={({ pressed }) => [
+                    {
+                      flex: 1,
+                      paddingVertical: 12,
+                      borderRadius: 16,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderWidth: 1,
+                      borderColor: "#E5484D",
+                      backgroundColor: "#E5484D",
+                      opacity: busy.denyFriend || busy.acceptFriend ? 0.55 : 1,
+                    },
+                    pressed && !(busy.denyFriend || busy.acceptFriend)
+                      ? { transform: [{ scale: 0.99 }], opacity: 0.97 }
+                      : null,
+                  ]}
+                >
+                  <Text style={{ color: "#fff", fontWeight: "900" }}>
+                    {busy.denyFriend ? "…" : "Deny"}
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() =>
+                    acceptIncoming(
+                      friendCta.from_user_id,
+                      friendCta.from_username,
+                    )
+                  }
+                  disabled={!!busy.acceptFriend || !!busy.denyFriend}
+                  style={({ pressed }) => [
+                    {
+                      flex: 1,
+                      paddingVertical: 12,
+                      borderRadius: 16,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderWidth: 1,
+                      borderColor: "rgba(255,255,255,0.14)",
+                      backgroundColor: "#1C2330",
+                      opacity: busy.acceptFriend || busy.denyFriend ? 0.55 : 1,
+                    },
+                    pressed && !(busy.acceptFriend || busy.denyFriend)
+                      ? { transform: [{ scale: 0.99 }], opacity: 0.97 }
+                      : null,
+                  ]}
+                >
+                  <Text style={{ color: "#fff", fontWeight: "900" }}>
+                    {busy.acceptFriend ? "…" : "Accept"}
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
+
+            {showCastleTip && (
+              <Text
+                style={{
+                  color: theme.subtext,
+                  fontStyle: "italic",
+                  fontWeight: "700",
+                }}
+              >
+                Tip: To castle, drag the king.
+              </Text>
+            )}
+          </>
+        )}
+      </ScrollView>
+
+      {/* Draw Modal */}
+      <Modal visible={showDrawModal} transparent animationType="fade">
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.55)",
+            justifyContent: "center",
+            padding: 18,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: theme.card,
+              borderRadius: 18,
+              padding: 16,
+              gap: 10,
+              borderWidth: 1,
+              borderColor: theme.border,
+            }}
+          >
+            <Text
+              style={{ fontSize: 18, fontWeight: "900", color: theme.text }}
+            >
+              {opponentUsername ?? "Opponent"} offered a draw
+            </Text>
+            {game?.draw_offer_at ? (
+              <Text style={{ color: theme.subtext, fontWeight: "800" }}>
+                Offered {since(game.draw_offer_at)}
+              </Text>
+            ) : null}
+
+            <Pressable
+              onPress={() => respondDraw("accepted")}
+              disabled={!!busy.drawRespond}
+              style={({ pressed }) => [
+                {
+                  paddingVertical: 12,
+                  borderRadius: 16,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderWidth: 1,
+                  borderColor: theme.primary,
+                  backgroundColor: theme.primary,
+                  opacity: busy.drawRespond ? 0.55 : 1,
+                },
+                pressed && !busy.drawRespond
+                  ? { transform: [{ scale: 0.99 }], opacity: 0.97 }
+                  : null,
+              ]}
+            >
+              <Text style={{ color: "#fff", fontWeight: "900" }}>
+                {busy.drawRespond ? "Working…" : "Accept draw"}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => respondDraw("declined")}
+              disabled={!!busy.drawRespond}
+              style={({ pressed }) => [
+                {
+                  paddingVertical: 12,
+                  borderRadius: 16,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  backgroundColor: theme.card,
+                  opacity: busy.drawRespond ? 0.55 : 1,
+                },
+                pressed && !busy.drawRespond
+                  ? { transform: [{ scale: 0.99 }], opacity: 0.97 }
+                  : null,
+              ]}
+            >
+              <Text style={{ color: theme.text, fontWeight: "900" }}>
+                {busy.drawRespond ? "Working…" : "Decline"}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+      {/* Rematch Modal */}
+      <Modal transparent animationType="fade" visible={showRematch}>
+        <View style={styles.overlay}>
+          <View
+            style={[
+              styles.modal,
+              {
+                backgroundColor: theme.card,
+                borderColor: theme.border,
+                borderWidth: 1,
+              },
+            ]}
+          >
+            <Text
+              style={{ fontSize: 18, fontWeight: "900", color: theme.text }}
+            >
+              Game over
+            </Text>
+            <Text
+              style={{
+                marginTop: 6,
+                color: theme.subtext,
+                fontWeight: "800",
+                fontSize: 16,
+              }}
+            >
+              Rematch?
+            </Text>
+
+            <View style={styles.actions}>
+              <Pressable onPress={() => setShowRematch(false)}>
+                <Text
+                  style={{
+                    color: theme.subtext,
+                    fontWeight: "900",
+                    fontSize: 16,
+                  }}
+                >
+                  No
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={async () => {
+                  setShowRematch(false);
+                  await rematch();
+                }}
+              >
+                <Text
+                  style={{
+                    color: theme.primary,
+                    fontWeight: "900",
+                    fontSize: 16,
+                  }}
+                >
+                  Yes
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    justifyContent: "space-evenly",
+    padding: 48,
+    alignContent: "center",
+    alignSelf: "center",
+  },
+  modal: {
+    width: 280, // or "80%"
+    maxWidth: "90%",
+    borderRadius: 18,
+    padding: 16,
+    gap: 10,
+    alignItems: "center",
+  },
+
+  actions: {
+    marginTop: 12,
+    flexDirection: "row",
+    justifyContent: "space-evenly",
+    gap: 20,
+  },
+});
