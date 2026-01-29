@@ -2,8 +2,8 @@ export default {
   expo: {
     name: "chessapp",
     slug: "chessapp",
-    version: "1.0.2",
-    runtimeVersion: "3",
+    version: "1.0.3",
+    runtimeVersion: "1",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
     scheme: "chessapp",
@@ -12,16 +12,18 @@ export default {
     ios: {
       supportsTablet: true,
       bundleIdentifier: "com.dotreduce.chessapp",
+      usesAppleSignIn: true,
       infoPlist: {
+        ITSAppUsesNonExemptEncryption: false, // 👈 ADD THIS
         NSCameraUsageDescription:
           "This app uses the camera for profile pictures.",
         NSPhotoLibraryUsageDescription:
           "This app needs access to your photo library for uploads.",
       },
     },
-
     android: {
       package: "com.dotreduce.chessapp",
+      versionCode: 4,
       adaptiveIcon: {
         backgroundColor: "#E6F4FE",
         foregroundImage: "./assets/images/android-icon-foreground.png",

@@ -8,6 +8,7 @@ import {
   Platform,
   Pressable,
   StyleSheet,
+  Image,
 } from "react-native";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
@@ -162,28 +163,32 @@ export default function LoginScreen() {
         ]}
       >
         {/* Logo / Title */}
+        {/* Logo / Title */}
         <View style={{ alignItems: "center", marginBottom: 24 }}>
-          <Text style={[styles.title, { color: theme.text }]}>dotChess</Text>
-          <Text style={[styles.subtitle, { color: theme.subtext }]}>
-            Play Chess with bots, friends, or people around the world at your
-            own pace.
-          </Text>
+          <Image
+            source={require("../../assets/images/logo.png")}
+            style={{ width: 250, height: 250, marginBottom: 0 }}
+            resizeMode="contain"
+          />
         </View>
 
+        <Text style={[styles.subtitle, { color: theme.subtext }]}>
+          Play Chess with bots, friends, or people around the world at your own
+          pace.
+        </Text>
         {/* Login button */}
         <Pressable
           onPress={loginWithGoogle}
-          style={({ pressed }) => [
-            styles.primaryBtn,
-            {
-              backgroundColor: theme.primary,
-              borderColor: theme.primary,
-            },
-            pressed && styles.pressed,
-          ]}
+          style={({ pressed }) => [styles.googleBtn, pressed && styles.pressed]}
         >
-          <Text style={styles.primaryText}>Continue with Google</Text>
+          <Image
+            source={require("../../assets/images/google.png")}
+            style={styles.googleIcon}
+            resizeMode="contain"
+          />
+          <Text style={styles.googleText}>Continue with Google</Text>
         </Pressable>
+
         {Platform.OS === "ios" && (
           <View style={{ marginTop: 12 }}>
             <AppleAuthentication.AppleAuthenticationButton
@@ -208,6 +213,9 @@ export default function LoginScreen() {
         {/* Fine print */}
         <Text style={[styles.footer, { color: theme.subtext }]}>
           By continuing, you agree to our Terms & Privacy Policy.
+        </Text>
+        <Text style={{ fontSize: 12, opacity: 0.6 }}>
+          Sign in options provide the same account access
         </Text>
       </View>
     </View>
@@ -268,5 +276,29 @@ const styles = StyleSheet.create({
   pressed: {
     transform: [{ scale: 0.99 }],
     opacity: 0.96,
+  },
+  googleBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+
+    backgroundColor: "#fff",
+    borderColor: "#dadce0",
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingVertical: 14,
+    marginTop: 20,
+  },
+
+  googleIcon: {
+    width: 36,
+    height: 36,
+  },
+
+  googleText: {
+    color: "#1f1f1f",
+    fontSize: 18,
+    fontWeight: "700",
   },
 });

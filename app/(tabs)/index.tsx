@@ -2,7 +2,6 @@ import React, { useCallback, useState } from "react";
 import {
   View,
   Text,
-  // Button,   // <-- optional: remove if you switch fully
   TextInput,
   FlatList,
   ScrollView,
@@ -24,6 +23,7 @@ import {
   acceptInvitedGame,
   denyInvitedGame,
   getActiveGames,
+  getUserStats, // ✅ ADD
 } from "../../lib/api";
 
 import InviteCard from "../compononents/Home/InviteCard";
@@ -68,6 +68,31 @@ function CwfButton({
       <Text style={[styles.btnText, { color: fg }]}>{title}</Text>
     </Pressable>
   );
+}
+
+// ✅ Figure out the "other user id" for both games and invites.
+// Works for: active games, pending invites, "invited_user_id", etc.
+function opponentId(row: any, myId?: number) {
+  if (!myId) return null;
+
+  const w = row.white_user_id ?? null;
+  const b = row.black_user_id ?? null;
+  const invited = row.invited_user_id ?? null;
+
+  if (w && w === myId) return b;
+  if (b && b === myId) return w;
+
+  // If I'm the invited user, opponent is whoever already occupies a side
+  if (invited && invited === myId) return w ?? b;
+
+  // Fallback: opponent is invited user (when I'm the creator)
+  if (invited && invited !== myId) return invited;
+
+  // Last resort: pick any id that's not me
+  if (w && w !== myId) return w;
+  if (b && b !== myId) return b;
+
+  return null;
 }
 
 export default function Lobby() {
@@ -134,6 +159,11 @@ export default function Lobby() {
     acceptId?: string;
     denyId?: string;
   }>({});
+  const [myStatsS, setMyStatsS] = useState<LoadState<any>>({
+    status: "loading",
+    data: null,
+    error: null,
+  });
 
   // ---- main loader
   const loadAll = useCallback(async () => {
@@ -150,9 +180,60 @@ export default function Lobby() {
 
       setProfileS({ status: "ready", data: prof, error: null });
 
-      const enriched = prof
-        ? games.map((g: any) => withOpponentUsername(g, prof))
+      if (prof?.id) {
+        try {
+          setMyStatsS((s) => ({ ...s, status: "loading", error: null }));
+          const mine = await getUserStats(prof.id);
+          setMyStatsS({ status: "ready", data: mine, error: null });
+        } catch (e) {
+          setMyStatsS({ status: "error", data: null, error: msg(e) });
+        }
+      }
+
+      // ✅ Build a set of all opponent user IDs shown in invites + games
+      const ids = new Set<number>();
+      if (prof?.id) {
+        games.forEach((g: any) => {
+          const id = opponentId(g, prof.id);
+          if (typeof id === "number") ids.add(id);
+        });
+        inv.forEach((i: any) => {
+          const id = opponentId(i, prof.id);
+          if (typeof id === "number") ids.add(id);
+        });
+      }
+
+      // ✅ Fetch stats for each opponent (in parallel)
+      // If one fails, we just omit that user's stats instead of breaking Lobby.
+      const statsMap: Record<number, any> = {};
+      await Promise.all(
+        [...ids].map(async (id) => {
+          try {
+            statsMap[id] = await getUserStats(id);
+          } catch {
+            // ignore per-user stats failures
+          }
+        }),
+      );
+
+      // ✅ Attach opponent_stats onto rows (InviteCard/GameCard can render it)
+      const inv2 = prof?.id
+        ? inv.map((i: any) => {
+            const oid = opponentId(i, prof.id);
+            return { ...i, opponent_stats: oid ? statsMap[oid] : null };
+          })
+        : inv;
+
+      const games2 = prof?.id
+        ? games.map((g: any) => {
+            const oid = opponentId(g, prof.id);
+            return { ...g, opponent_stats: oid ? statsMap[oid] : null };
+          })
         : games;
+
+      const enriched = prof
+        ? games2.map((g: any) => withOpponentUsername(g, prof))
+        : games2;
 
       const sorted = enriched.sort((a: any, b: any) => {
         const aMyTurn = prof && a.to_move_user_id === prof.id;
@@ -168,8 +249,8 @@ export default function Lobby() {
       });
 
       setInvitesS({
-        status: inv.length ? "ready" : "empty",
-        data: inv,
+        status: inv2.length ? "ready" : "empty",
+        data: inv2,
         error: null,
       });
 
@@ -244,7 +325,9 @@ export default function Lobby() {
       setBusy((b) => ({ ...b, bot: false }));
     }
   }
-
+  // console.log("Invites ", invitesS);
+  // console.log("Games ", gamesS);
+  console.log("Profile ", profileS);
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.bg }]}>
       {/* Header card */}
@@ -290,6 +373,11 @@ export default function Lobby() {
                 </Text>
                 <Text style={[styles.sub, { color: theme.subtext }]}>
                   Rating: {profile.rating}
+                </Text>
+                <Text style={[styles.sub, { color: theme.subtext }]}>
+                  W:{myStatsS.data?.stats?.wins ?? 0} L:
+                  {myStatsS.data?.stats?.losses ?? 0} D:
+                  {myStatsS.data?.stats?.draws ?? 0}
                 </Text>
               </View>
             </View>
@@ -440,7 +528,6 @@ export default function Lobby() {
     </SafeAreaView>
   );
 }
-
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   scrollPad: { paddingBottom: 24, paddingHorizontal: 14 },

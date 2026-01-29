@@ -30,10 +30,12 @@ import {
 
 import Chessboard from "dawikk-chessboard";
 import { confirm } from "../../compononents/Shared/Confirm";
+import { msg } from "../../../lib/loadState";
+import type { LoadState } from "../../../lib/loadState";
 
-import { LoadState, msg } from "../../../lib/loadState";
 import { ErrorBanner, SkeletonRow } from "../../compononents/Shared/States";
 import { BACKEND_URL } from "../../../lib/config";
+import { StatusModal } from "../../compononents/Shared/StatusModal";
 
 function makeRequestId() {
   return `m_${Date.now()}_${Math.random().toString(16).slice(2)}`;
@@ -67,6 +69,36 @@ export default function GameScreen() {
   const lastSeenFenRef = React.useRef<string | null>(null);
   const sendingRef = React.useRef(false);
   const rematchPromptedRef = React.useRef(false);
+
+  // ✅ CHECK / CHECKMATE MODAL (keep near top so it's defined before hooks that use it)
+  const [statusMsg, setStatusMsg] = React.useState<string | null>(null);
+  const lastStatusRef = React.useRef<"none" | "check" | "checkmate">("none");
+
+  function maybeShowCheckModal(fen: string) {
+    try {
+      const chess = new Chess(fen);
+
+      const isMate =
+        (chess as any).isCheckmate?.() || (chess as any).in_checkmate?.();
+      const isCheck = (chess as any).isCheck?.() || (chess as any).in_check?.();
+
+      const next: "none" | "check" | "checkmate" = isMate
+        ? "checkmate"
+        : isCheck
+          ? "check"
+          : "none";
+
+      // Only pop when status changes (prevents spam on polls/rerenders)
+      if (next === lastStatusRef.current) return;
+      lastStatusRef.current = next;
+
+      if (next === "checkmate") setStatusMsg("Checkmate.");
+      else if (next === "check") setStatusMsg("Check!");
+      else setStatusMsg(null);
+    } catch {
+      // ignore
+    }
+  }
 
   // ---- busy flags for mutations
   const [busy, setBusy] = React.useState<{
@@ -111,9 +143,9 @@ export default function GameScreen() {
       setOutgoingS((s) => ({ ...s, status: "loading", error: null }));
 
       const [friendsRows, incomingRows, outgoingRows] = await Promise.all([
-        getFriendsList(), // expects [{ id: number }, ...]
-        getIncomingFriendRequests(), // expects [{ from_user_id, from_username, id, created_at }, ...]
-        getOutgoingFriendRequests(), // expects [{ to_user_id, to_username, id, created_at }, ...]
+        getFriendsList(),
+        getIncomingFriendRequests(),
+        getOutgoingFriendRequests(),
       ]);
 
       const friendIds = (friendsRows ?? [])
@@ -177,6 +209,9 @@ export default function GameScreen() {
       setLastMove({ from: g.last_move_from, to: g.last_move_to });
     }
 
+    // ✅ show status for loaded position (without calling in render)
+    if (g?.fen && g.fen !== "startpos") maybeShowCheckModal(g.fen);
+
     return g;
   }, [id]);
 
@@ -237,6 +272,8 @@ export default function GameScreen() {
       if (data.fen) {
         prevFenRef.current = data.fen;
         lastSeenFenRef.current = data.fen;
+        // Optional: if server sends a different fen than client predicted
+        maybeShowCheckModal(data.fen);
       }
     } catch (e) {
       setGameS(
@@ -358,6 +395,7 @@ export default function GameScreen() {
             if (fenChanged) {
               lastSeenFenRef.current = fresh.fen;
               prevFenRef.current = fresh.fen;
+              maybeShowCheckModal(fresh.fen);
             }
             setGameS((s) => ({
               status: "ready",
@@ -455,6 +493,12 @@ export default function GameScreen() {
   // board fen
   const START_FEN = React.useMemo(() => new Chess().fen(), []);
   const boardFen = game?.fen && game.fen !== "startpos" ? game.fen : START_FEN;
+
+  // ✅ If the user navigates back/forward and game.fen changes, keep status in sync (no render-time call)
+  React.useEffect(() => {
+    if (!game?.fen || game.fen === "startpos") return;
+    maybeShowCheckModal(game.fen);
+  }, [game?.fen]);
 
   function since(ts?: string) {
     if (!ts) return "—";
@@ -627,51 +671,59 @@ export default function GameScreen() {
                 padding: 12,
               }}
             >
-              {/* chips */}
-              <View style={{ flexDirection: "row", gap: 10 }}>
-                {isGameOver ? (
-                  <Text
-                    style={{
-                      marginTop: 10,
-                      fontSize: 18,
-                      fontWeight: "900",
-                      color: theme.text,
-                    }}
-                  >
-                    {game.result === "draw"
-                      ? "Draw"
-                      : game.result === myColor
-                        ? "You won 🎉"
-                        : "You lost 😔"}
-                  </Text>
-                ) : (
-                  <View
-                    style={{
-                      marginTop: 16,
-                      alignSelf: "flex-start",
-                      paddingVertical: 6,
-                      paddingHorizontal: 12,
-                      borderRadius: 999,
-                      backgroundColor: isMyTurn
-                        ? theme.primary
-                        : "rgba(248, 244, 28, 0.77)",
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: isMyTurn ? "#fff" : "rgba(44, 44, 26, 0.55)",
-                        fontWeight: "900",
-                        fontSize: 14,
-                        letterSpacing: 0.2,
-                      }}
-                    >
-                      {isMyTurn ? "YOUR TURN" : "WAITING ON OPPONENT"}
-                    </Text>
-                  </View>
-                )}
+              {/* STATUS */}
+              {isGameOver ? (
+                <Text
+                  style={{
+                    marginBottom: 12,
+                    fontSize: 18,
+                    fontWeight: "900",
+                    color: theme.text,
+                    textAlign: "center",
+                  }}
+                >
+                  {game.result === "draw"
+                    ? "Draw"
+                    : game.result === myColor
+                      ? "You won 🎉"
+                      : "You lost 😔"}
+                </Text>
+              ) : (
                 <View
                   style={{
-                    flex: 1,
+                    alignSelf: "center",
+                    marginBottom: 12,
+                    paddingVertical: 6,
+                    paddingHorizontal: 14,
+                    borderRadius: 999,
+                    backgroundColor: isMyTurn
+                      ? theme.primary
+                      : "rgba(248, 244, 28, 0.77)",
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: isMyTurn ? "#fff" : "rgba(44, 44, 26, 0.55)",
+                      fontWeight: "900",
+                      fontSize: 14,
+                      letterSpacing: 0.3,
+                    }}
+                  >
+                    {isMyTurn ? "YOUR TURN" : "WAITING FOR OPPONENT"}
+                  </Text>
+                </View>
+              )}
+
+              {/* INFO ROW */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                }}
+              >
+                <View
+                  style={{
+                    width: "48%",
                     borderRadius: 14,
                     padding: 10,
                     backgroundColor: "rgba(0,0,0,0.04)",
@@ -682,6 +734,7 @@ export default function GameScreen() {
                       fontSize: 14,
                       fontWeight: "900",
                       color: theme.text,
+                      textAlign: "center",
                     }}
                   >
                     You
@@ -692,6 +745,7 @@ export default function GameScreen() {
                       fontSize: 16,
                       fontWeight: "900",
                       color: theme.text,
+                      textAlign: "center",
                     }}
                   >
                     {myColor === "w"
@@ -701,9 +755,10 @@ export default function GameScreen() {
                         : "—"}
                   </Text>
                 </View>
+
                 <View
                   style={{
-                    flex: 1,
+                    width: "48%",
                     borderRadius: 14,
                     padding: 10,
                     backgroundColor: "rgba(0,0,0,0.04)",
@@ -714,6 +769,7 @@ export default function GameScreen() {
                       fontSize: 14,
                       fontWeight: "900",
                       color: theme.text,
+                      textAlign: "center",
                     }}
                   >
                     Turn
@@ -724,6 +780,7 @@ export default function GameScreen() {
                       fontSize: 16,
                       fontWeight: "900",
                       color: theme.text,
+                      textAlign: "center",
                     }}
                   >
                     {game.turn === "w"
@@ -734,17 +791,18 @@ export default function GameScreen() {
                   </Text>
                 </View>
               </View>
-              <Text style={{ marginTop: 12, fontSize: 14, color: theme.text }}>
-                Last move:
-              </Text>
-              <Text
-                style={{ marginTop: 10, fontWeight: "800", color: theme.text }}
-              >
-                <Text style={{ fontWeight: "900" }}>
-                  {game.last_move_san ?? "—"}
-                </Text>
-              </Text>
             </View>
+
+            <Text style={{ marginTop: 12, fontSize: 14, color: theme.text }}>
+              Last move:
+            </Text>
+            <Text
+              style={{ marginTop: 10, fontWeight: "800", color: theme.text }}
+            >
+              <Text style={{ fontWeight: "900" }}>
+                {game.last_move_san ?? "—"}
+              </Text>
+            </Text>
 
             {/* Board card */}
             <View
@@ -801,6 +859,8 @@ export default function GameScreen() {
                     }));
 
                     setLastMove({ from: m.from, to: m.to });
+                    maybeShowCheckModal(nextFen);
+
                     sendMove(m.from, m.to, (m as any).promotion);
                   }}
                 />
@@ -921,139 +981,153 @@ export default function GameScreen() {
             </View>
 
             {/* Friend Request CTA (bottom) */}
-            {friendCta.kind === "outgoing" ? (
-              <View
-                style={{
-                  paddingVertical: 12,
-                  borderRadius: 16,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderWidth: 1,
-                  borderColor: theme.border,
-                  backgroundColor: theme.card,
-                }}
-              >
-                <Text style={{ color: theme.subtext, fontWeight: "900" }}>
-                  Friend request sent
-                </Text>
-              </View>
-            ) : friendCta.kind === "canAdd" ? (
-              <Pressable
-                onPress={addFriend}
-                disabled={!!busy.addFriend}
-                style={({ pressed }) => [
-                  {
-                    paddingVertical: 12,
-                    borderRadius: 16,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    borderWidth: 1,
-                    borderColor: "rgba(255,255,255,0.14)",
-                    backgroundColor: "#1C2330",
-                    opacity: busy.addFriend ? 0.55 : 1,
-                  },
-                  pressed && !busy.addFriend
-                    ? { transform: [{ scale: 0.99 }], opacity: 0.97 }
-                    : null,
-                ]}
-              >
-                <Text style={{ color: "#fff", fontWeight: "900" }}>
-                  {busy.addFriend ? "Adding…" : `Add ${friendCta.username}`}
-                </Text>
-              </Pressable>
-            ) : friendCta.kind === "incoming" ? (
-              <View style={{ flexDirection: "row", gap: 10 }}>
-                <View
-                  style={{
-                    paddingVertical: 12,
-                    paddingHorizontal: 12,
-                    borderRadius: 16,
-                    borderWidth: 1,
-                    borderColor: theme.border,
-                    backgroundColor: theme.card,
-                  }}
-                >
-                  <Text
+            {(() => {
+              if (friendCta.kind === "outgoing") {
+                return (
+                  <View
                     style={{
-                      color: theme.text,
-                      fontWeight: "900",
-                      fontSize: 16,
+                      paddingVertical: 12,
+                      borderRadius: 16,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderWidth: 1,
+                      borderColor: theme.border,
+                      backgroundColor: theme.card,
                     }}
-                    numberOfLines={2}
                   >
-                    {friendCta.from_username} has sent you a friend request{" "}
-                    <Text
+                    <Text style={{ color: theme.subtext, fontWeight: "900" }}>
+                      Friend request sent
+                    </Text>
+                  </View>
+                );
+              }
+              if (friendCta.kind === "canAdd") {
+                return (
+                  <Pressable
+                    onPress={addFriend}
+                    disabled={!!busy.addFriend}
+                    style={({ pressed }) => [
+                      {
+                        paddingVertical: 12,
+                        borderRadius: 16,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        borderWidth: 1,
+                        borderColor: "rgba(255,255,255,0.14)",
+                        backgroundColor: "#1C2330",
+                        opacity: busy.addFriend ? 0.55 : 1,
+                      },
+                      pressed && !busy.addFriend
+                        ? { transform: [{ scale: 0.99 }], opacity: 0.97 }
+                        : null,
+                    ]}
+                  >
+                    <Text style={{ color: "#fff", fontWeight: "900" }}>
+                      {busy.addFriend ? "Adding…" : `Add ${friendCta.username}`}
+                    </Text>
+                  </Pressable>
+                );
+              }
+              if (friendCta.kind === "incoming") {
+                return (
+                  <View style={{ flexDirection: "row", gap: 10 }}>
+                    <View
                       style={{
-                        color: "#E5484D",
-                        fontWeight: "900",
-                        fontSize: 18,
+                        paddingVertical: 12,
+                        paddingHorizontal: 12,
+                        borderRadius: 16,
+                        borderWidth: 1,
+                        borderColor: theme.border,
+                        backgroundColor: theme.card,
                       }}
                     >
-                      !
-                    </Text>
-                  </Text>
-                </View>
-                <Pressable
-                  onPress={() =>
-                    denyIncoming(
-                      friendCta.from_user_id,
-                      friendCta.from_username,
-                    )
-                  }
-                  disabled={!!busy.denyFriend || !!busy.acceptFriend}
-                  style={({ pressed }) => [
-                    {
-                      flex: 1,
-                      paddingVertical: 12,
-                      borderRadius: 16,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      borderWidth: 1,
-                      borderColor: "#E5484D",
-                      backgroundColor: "#E5484D",
-                      opacity: busy.denyFriend || busy.acceptFriend ? 0.55 : 1,
-                    },
-                    pressed && !(busy.denyFriend || busy.acceptFriend)
-                      ? { transform: [{ scale: 0.99 }], opacity: 0.97 }
-                      : null,
-                  ]}
-                >
-                  <Text style={{ color: "#fff", fontWeight: "900" }}>
-                    {busy.denyFriend ? "…" : "Deny"}
-                  </Text>
-                </Pressable>
+                      <Text
+                        style={{
+                          color: theme.text,
+                          fontWeight: "900",
+                          fontSize: 16,
+                        }}
+                        numberOfLines={2}
+                      >
+                        {friendCta.from_username} has sent you a friend request{" "}
+                        <Text
+                          style={{
+                            color: "#E5484D",
+                            fontWeight: "900",
+                            fontSize: 18,
+                          }}
+                        >
+                          !
+                        </Text>
+                      </Text>
+                    </View>
 
-                <Pressable
-                  onPress={() =>
-                    acceptIncoming(
-                      friendCta.from_user_id,
-                      friendCta.from_username,
-                    )
-                  }
-                  disabled={!!busy.acceptFriend || !!busy.denyFriend}
-                  style={({ pressed }) => [
-                    {
-                      flex: 1,
-                      paddingVertical: 12,
-                      borderRadius: 16,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      borderWidth: 1,
-                      borderColor: "rgba(255,255,255,0.14)",
-                      backgroundColor: "#1C2330",
-                      opacity: busy.acceptFriend || busy.denyFriend ? 0.55 : 1,
-                    },
-                    pressed && !(busy.acceptFriend || busy.denyFriend)
-                      ? { transform: [{ scale: 0.99 }], opacity: 0.97 }
-                      : null,
-                  ]}
-                >
-                  <Text style={{ color: "#fff", fontWeight: "900" }}>
-                    {busy.acceptFriend ? "…" : "Accept"}
-                  </Text>
-                </Pressable>
-              </View>
-            ) : null}
+                    <Pressable
+                      onPress={() =>
+                        denyIncoming(
+                          friendCta.from_user_id,
+                          friendCta.from_username,
+                        )
+                      }
+                      disabled={!!busy.denyFriend || !!busy.acceptFriend}
+                      style={({ pressed }) => [
+                        {
+                          flex: 1,
+                          paddingVertical: 12,
+                          borderRadius: 16,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          borderWidth: 1,
+                          borderColor: "#E5484D",
+                          backgroundColor: "#E5484D",
+                          opacity:
+                            busy.denyFriend || busy.acceptFriend ? 0.55 : 1,
+                        },
+                        pressed && !(busy.denyFriend || busy.acceptFriend)
+                          ? { transform: [{ scale: 0.99 }], opacity: 0.97 }
+                          : null,
+                      ]}
+                    >
+                      <Text style={{ color: "#fff", fontWeight: "900" }}>
+                        {busy.denyFriend ? "…" : "Deny"}
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() =>
+                        acceptIncoming(
+                          friendCta.from_user_id,
+                          friendCta.from_username,
+                        )
+                      }
+                      disabled={!!busy.acceptFriend || !!busy.denyFriend}
+                      style={({ pressed }) => [
+                        {
+                          flex: 1,
+                          paddingVertical: 12,
+                          borderRadius: 16,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          borderWidth: 1,
+                          borderColor: "rgba(255,255,255,0.14)",
+                          backgroundColor: "#1C2330",
+                          opacity:
+                            busy.acceptFriend || busy.denyFriend ? 0.55 : 1,
+                        },
+                        pressed && !(busy.acceptFriend || busy.denyFriend)
+                          ? { transform: [{ scale: 0.99 }], opacity: 0.97 }
+                          : null,
+                      ]}
+                    >
+                      <Text style={{ color: "#fff", fontWeight: "900" }}>
+                        {busy.acceptFriend ? "…" : "Accept"}
+                      </Text>
+                    </Pressable>
+                  </View>
+                );
+              }
+              return null;
+            })()}
 
             {showCastleTip && (
               <Text
@@ -1151,6 +1225,7 @@ export default function GameScreen() {
           </View>
         </View>
       </Modal>
+
       {/* Rematch Modal */}
       <Modal transparent animationType="fade" visible={showRematch}>
         <View style={styles.overlay}>
@@ -1213,9 +1288,18 @@ export default function GameScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ✅ Check / Checkmate modal */}
+      <StatusModal
+        visible={!!statusMsg}
+        title="Game Status"
+        message={statusMsg ?? ""}
+        onClose={() => setStatusMsg(null)}
+      />
     </View>
   );
 }
+
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
@@ -1226,14 +1310,13 @@ const styles = StyleSheet.create({
     alignSelf: "center",
   },
   modal: {
-    width: 280, // or "80%"
+    width: 280,
     maxWidth: "90%",
     borderRadius: 18,
     padding: 16,
     gap: 10,
     alignItems: "center",
   },
-
   actions: {
     marginTop: 12,
     flexDirection: "row",

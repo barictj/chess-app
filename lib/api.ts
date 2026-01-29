@@ -49,7 +49,6 @@ export async function getGameInvites() {
   });
   const text = await res.text();
   if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
-  console.log("Game invites response text:", text);
   return JSON.parse(text);
 }
 
@@ -418,6 +417,21 @@ export async function setUserAvatarUrl(avatarUrl: string) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ avatarUrl }),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
+  return JSON.parse(text);
+}
+//Get User Stats by user ID
+export async function getUserStats(userId: number) {
+  const token = await getToken();
+  if (!token) throw new Error("Not authenticated");
+  const res = await fetch(`${BACKEND_URL}/api/stats/${userId}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
   });
   const text = await res.text();
   if (!res.ok) throw new Error(text || `HTTP ${res.status}`);

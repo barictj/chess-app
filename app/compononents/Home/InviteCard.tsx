@@ -45,7 +45,7 @@ export default function InviteCard({
       alive = false;
     };
   }, [invite.from_user_id]);
-
+  console.log("Rendering InviteCard for invite ID:", invite);
   return (
     <View
       style={[
@@ -73,6 +73,12 @@ export default function InviteCard({
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text numberOfLines={1} style={[styles.title, { color: theme.text }]}>
             {inviteUsername}
+          </Text>
+
+          <Text style={{ fontWeight: "800" }}>
+            Record: {invite.opponent_stats?.stats?.wins ?? 0}W/
+            {invite.opponent_stats?.stats?.losses ?? 0}L/
+            {invite.opponent_stats?.stats?.draws ?? 0}D
           </Text>
           <Text style={[styles.sub, { color: theme.subtext }]}>
             Game invite #{invite.id}

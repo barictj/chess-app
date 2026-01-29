@@ -91,6 +91,13 @@ export default function GameCard({ game, myUserId, onPress }: Props) {
             {opponent}
           </Text>
         </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontWeight: "800" }}>
+            Record: {game.opponent_stats?.stats?.wins ?? 0}-
+            {game.opponent_stats?.stats?.losses ?? 0}-
+            {game.opponent_stats?.stats?.draws ?? 0}D
+          </Text>
+        </View>
 
         <View style={styles.bottomRow}>
           {myTurn ? (
