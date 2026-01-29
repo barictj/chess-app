@@ -1,12 +1,12 @@
 export default {
   expo: {
-    name: "chessapp",
+    name: "dotChess",
     slug: "chessapp",
-    version: "1.0.3",
+    version: "1.0.4",
     runtimeVersion: "1",
     orientation: "portrait",
-    icon: "./assets/images/icon.png",
-    scheme: "chessapp",
+    icon: "./assets/images/logo.png",
+    scheme: "dotChess",
     userInterfaceStyle: "automatic",
 
     ios: {
@@ -23,7 +23,7 @@ export default {
     },
     android: {
       package: "com.dotreduce.chessapp",
-      versionCode: 4,
+      versionCode: 5,
       adaptiveIcon: {
         backgroundColor: "#E6F4FE",
         foregroundImage: "./assets/images/android-icon-foreground.png",
