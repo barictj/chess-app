@@ -329,7 +329,10 @@ export default function Lobby() {
   // console.log("Games ", gamesS);
   console.log("Profile ", profileS);
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: theme.bg }]}>
+    <SafeAreaView
+      style={[styles.safe, { backgroundColor: theme.bg }]}
+      edges={["left", "right", "bottom"]}
+    >
       {/* Header card */}
       <View
         style={[
@@ -344,7 +347,11 @@ export default function Lobby() {
         ) : (
           <>
             <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
+              style={{
+                flexDirection: "row",
+                alignItems: "flex-start",
+                gap: 2,
+              }}
             >
               {/* LEFT COLUMN: avatar */}
               {profile?.avatar_url ? (
@@ -530,14 +537,14 @@ export default function Lobby() {
 }
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  scrollPad: { paddingBottom: 24, paddingHorizontal: 14 },
+  scrollPad: { paddingBottom: 24, paddingHorizontal: 6 },
 
   card: {
     borderWidth: 1,
     borderRadius: 16,
     padding: 14,
     marginHorizontal: 14,
-    marginTop: 12,
+    marginTop: 10,
     ...Platform.select({
       ios: {
         shadowColor: "#000",

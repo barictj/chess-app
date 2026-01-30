@@ -1,6 +1,6 @@
 import React from "react";
 import { View, ActivityIndicator, Text, Button } from "react-native";
-
+import { useTheme } from "../../../lib/ThemeContext";
 export function ErrorBanner({
   text,
   onRetry,
@@ -8,12 +8,30 @@ export function ErrorBanner({
   text: string;
   onRetry: () => void;
 }) {
+  const { theme } = useTheme();
+
   return (
-    <View style={{ padding: 12, borderWidth: 1, marginVertical: 8 }}>
-      <Text style={{ fontWeight: "700" }}>Something went wrong</Text>
-      <Text style={{ marginTop: 4 }}>{text}</Text>
+    <View
+      style={{
+        padding: 12,
+        borderWidth: 1,
+        marginVertical: 8,
+        borderColor: theme.border,
+        backgroundColor: theme.bg,
+      }}
+    >
+      <Text
+        style={{
+          marginTop: 4,
+          color: theme.text,
+          fontSize: 16,
+          fontWeight: "bold",
+        }}
+      >
+        {text}
+      </Text>
       <View style={{ height: 8 }} />
-      <Button title="Close" onPress={onRetry} />
+      <Button title="Close" onPress={onRetry} color={theme.primary} />
     </View>
   );
 }

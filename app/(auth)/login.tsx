@@ -18,10 +18,12 @@ import Constants from "expo-constants";
 import { useTheme } from "../../lib/ThemeContext";
 import * as AppleAuthentication from "expo-apple-authentication";
 import { BACKEND_URL } from "../../lib/config";
+
 WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const { token } = useLocalSearchParams<{ token?: string }>();
+  const theme = useTheme().theme;
 
   // Handle token if present in params
   useEffect(() => {
@@ -151,8 +153,6 @@ export default function LoginScreen() {
     }
   }
 
-  const { theme } = useTheme();
-
   return (
     <View style={[styles.root, { backgroundColor: theme.bg }]}>
       {/* Card */}
@@ -205,7 +205,14 @@ export default function LoginScreen() {
           </View>
         )}
         {Platform.OS !== "ios" && (
-          <Text style={{ opacity: 0.5, textAlign: "center", marginTop: 12 }}>
+          <Text
+            style={{
+              opacity: 0.5,
+              textAlign: "center",
+              marginTop: 12,
+              color: theme.subtext,
+            }}
+          >
             Sign in with Apple is available on iOS
           </Text>
         )}
@@ -214,7 +221,7 @@ export default function LoginScreen() {
         <Text style={[styles.footer, { color: theme.subtext }]}>
           By continuing, you agree to our Terms & Privacy Policy.
         </Text>
-        <Text style={{ fontSize: 12, opacity: 0.6 }}>
+        <Text style={{ fontSize: 12, opacity: 0.6, color: theme.subtext }}>
           Sign in options provide the same account access
         </Text>
       </View>

@@ -284,6 +284,11 @@ export default function ProfileScreen() {
           <Switch
             value={mode === "dark"}
             onValueChange={(v) => setMode(v ? "dark" : "light")}
+            trackColor={{
+              false: theme.border, // 👈 off background
+              true: theme.primary, // 👈 on background
+            }}
+            thumbColor={mode === "dark" ? "#fff" : "#999"}
           />
         </View>
 

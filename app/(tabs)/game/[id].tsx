@@ -325,17 +325,20 @@ export default function GameScreen() {
     try {
       if (!game) return;
       setBusy((b) => ({ ...b, offerDraw: true }));
+
       await offerDraw(String(game.id));
       await loadGame();
+
+      setStatusMsg("Draw offer sent."); // ✅ POP StatusModal
     } catch (e) {
       setGameS(
         (s) => ({ status: "error", data: s.data, error: msg(e) }) as any,
       );
+      setStatusMsg(msg(e)); // optional: show failure reason
     } finally {
       setBusy((b) => ({ ...b, offerDraw: false }));
     }
   }
-
   async function respondDraw(status: "accepted" | "declined") {
     try {
       if (!game) return;
@@ -530,14 +533,18 @@ export default function GameScreen() {
       return { kind: "outgoing", to_username: outgoingReq.to_username };
     return { kind: "canAdd", username: opponentUsername };
   })();
-
   async function addFriend() {
     if (!opponentUsername) return;
     try {
       setBusy((b) => ({ ...b, addFriend: true }));
+
       await requestFriend(opponentUsername);
       await loadFriendsBundle();
+
+      setStatusMsg("Friend request sent."); // ✅ POP
+      setTimeout(() => setStatusMsg(null), 1500); // optional auto-close
     } catch (e) {
+      setStatusMsg(msg(e)); // optional
       Alert.alert("Error", msg(e));
     } finally {
       setBusy((b) => ({ ...b, addFriend: false }));

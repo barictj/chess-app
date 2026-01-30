@@ -1,5 +1,7 @@
 import React from "react";
 import { Modal, View, Text, Pressable, StyleSheet } from "react-native";
+import { useTheme } from "../../../lib/ThemeContext";
+import type { Theme } from "../../../lib/theme";
 
 export function StatusModal({
   visible,
@@ -12,13 +14,11 @@ export function StatusModal({
   message: string;
   onClose: () => void;
 }) {
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
+
   return (
-    <Modal
-      transparent
-      visible={visible}
-      animationType="fade"
-      onRequestClose={onClose}
-    >
+    <Modal transparent visible={visible} animationType="fade">
       <View style={styles.backdrop}>
         <View style={styles.card}>
           <View style={styles.header}>
@@ -44,63 +44,57 @@ export function StatusModal({
   );
 }
 
-const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.65)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 22,
-  },
-  card: {
-    width: "100%",
-    maxWidth: 360,
-    borderRadius: 20,
-    padding: 16,
-    backgroundColor: "#121826", // dark navy
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    shadowColor: "#000",
-    shadowOpacity: 0.35,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 10,
-  },
-  header: {
-    marginBottom: 10,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.10)",
-  },
-  title: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "900",
-    letterSpacing: 0.2,
-  },
-  message: {
-    color: "rgba(255,255,255,0.85)",
-    fontSize: 16,
-    fontWeight: "700",
-    lineHeight: 22,
-  },
-  actions: {
-    marginTop: 14,
-    flexDirection: "row",
-    justifyContent: "flex-end",
-  },
-  btn: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
-  },
-  btnPressed: { transform: [{ scale: 0.99 }], opacity: 0.95 },
-  btnText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "900",
-  },
-});
+const makeStyles = (theme: Theme) =>
+  StyleSheet.create({
+    backdrop: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.55)",
+      justifyContent: "center",
+      alignItems: "center",
+      padding: 22,
+    },
+    card: {
+      width: "100%",
+      maxWidth: 360,
+      borderRadius: 20,
+      padding: 16,
+      backgroundColor: theme.card,
+      borderWidth: 1,
+      borderColor: theme.border,
+      elevation: 10,
+    },
+    header: {
+      marginBottom: 10,
+      paddingBottom: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.border,
+    },
+    title: {
+      color: theme.text,
+      fontSize: 18,
+      fontWeight: "900",
+    },
+    message: {
+      color: theme.subtext,
+      fontSize: 16,
+      fontWeight: "700",
+      lineHeight: 22,
+    },
+    actions: {
+      marginTop: 14,
+      flexDirection: "row",
+      justifyContent: "flex-end",
+    },
+    btn: {
+      paddingVertical: 10,
+      paddingHorizontal: 16,
+      borderRadius: 14,
+      backgroundColor: theme.primary,
+    },
+    btnPressed: { transform: [{ scale: 0.98 }], opacity: 0.9 },
+    btnText: {
+      color: "#fff",
+      fontSize: 16,
+      fontWeight: "900",
+    },
+  });
