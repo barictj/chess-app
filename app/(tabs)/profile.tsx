@@ -237,7 +237,7 @@ export default function ProfileScreen() {
               Rating: {profile?.rating ?? "—"}
             </Text>
 
-            <Pressable
+            {/* <Pressable
               onPress={openAvatarPrompt}
               disabled={!!busy.avatar}
               style={({ pressed }) => [
@@ -253,7 +253,7 @@ export default function ProfileScreen() {
               <Text style={{ color: "#fff", fontWeight: "900" }}>
                 {busy.avatar ? "Updating…" : "Change avatar"}
               </Text>
-            </Pressable>
+            </Pressable> */}
           </View>
         </View>
       </View>
