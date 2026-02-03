@@ -1,7 +1,7 @@
 import React from "react";
 import { View, ActivityIndicator, Text, Button } from "react-native";
 import { useTheme } from "../../../lib/ThemeContext";
-export function ErrorBanner({
+export default function ErrorBanner({
   text,
   onRetry,
 }: {

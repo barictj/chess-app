@@ -24,6 +24,13 @@ export default {
     android: {
       package: "com.dotreduce.chessapp",
       versionCode: 5,
+      intentFilters: [
+        {
+          action: "VIEW",
+          data: [{ scheme: "dotChess", host: "login" }],
+          category: ["BROWSABLE", "DEFAULT"],
+        },
+      ],
       adaptiveIcon: {
         backgroundColor: "#E6F4FE",
         foregroundImage: "./assets/images/android-icon-foreground.png",

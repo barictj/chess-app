@@ -30,7 +30,7 @@ import InviteCard from "../compononents/Home/InviteCard";
 import GameCard from "../compononents/Home/GameCard";
 import { useTheme } from "../../lib/ThemeContext";
 import { LoadState, msg } from "../../lib/loadState";
-import { ErrorBanner, SkeletonRow } from "../compononents/Shared/States";
+import ErrorBanner, { SkeletonRow } from "../compononents/Shared/States";
 
 function CwfButton({
   title,

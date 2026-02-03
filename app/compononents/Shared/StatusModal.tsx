@@ -3,7 +3,7 @@ import { Modal, View, Text, Pressable, StyleSheet } from "react-native";
 import { useTheme } from "../../../lib/ThemeContext";
 import type { Theme } from "../../../lib/theme";
 
-export function StatusModal({
+export default function StatusModal({
   visible,
   title = "Status",
   message,

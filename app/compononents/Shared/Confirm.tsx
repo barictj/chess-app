@@ -9,7 +9,7 @@ type ConfirmParams = {
   onConfirm: () => void | Promise<void>;
 };
 
-export function confirmAlert({
+export default function confirmAlert({
   title = "Are you sure?",
   message,
   confirmText,

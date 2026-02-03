@@ -6,16 +6,30 @@ import {
 } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
-  BannerAd,
-  BannerAdSize,
-  TestIds,
-} from "react-native-google-mobile-ads";
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
+import Constants from "expo-constants";
 
-import { useTheme } from "../../lib/ThemeContext"; // adjust path if needed
+import { useTheme } from "../../lib/ThemeContext";
 
 configureReanimatedLogger({ level: ReanimatedLogLevel.warn, strict: false });
+
+const isExpoGo = Constants.appOwnership === "expo";
+
+let BannerAd: any = null;
+let BannerAdSize: any = null;
+let TestIds: any = null;
+
+if (!isExpoGo) {
+  try {
+    const ads = require("react-native-google-mobile-ads");
+    BannerAd = ads.BannerAd;
+    BannerAdSize = ads.BannerAdSize;
+    TestIds = ads.TestIds;
+  } catch {}
+}
 
 export default function TabsLayout() {
   const { theme } = useTheme();
@@ -25,15 +39,13 @@ export default function TabsLayout() {
   const INACTIVE = "rgba(255,255,255,0.65)";
   const ACTIVE = "#FFFFFF";
 
-  // Your real banner unit id:
   const BANNER_UNIT_ID = "ca-app-pub-7166427778546018/2888339328";
 
-  // Standard banner height is 50 on phones; add safe-area bottom so it’s not clipped.
-  const bannerHeight = 50 + insets.bottom;
+  // Reserve ONLY the banner height in the content area.
+  const bannerHeight = BannerAd ? 50 : 0;
 
   return (
-    <View style={{ flex: 1 }}>
-      {/* Tabs area (leave room for banner at the bottom) */}
+    <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
       <View style={{ flex: 1, marginBottom: bannerHeight }}>
         <Tabs
           screenOptions={{
@@ -41,7 +53,10 @@ export default function TabsLayout() {
             tabBarStyle: {
               backgroundColor: HEADER_BG,
               borderTopColor: "rgba(255,255,255,0.10)",
-              paddingBottom: 16,
+
+              // KEY: don't paint the safe-area as tab bar background
+              height: 56,
+              paddingBottom: 0,
               paddingTop: 2,
             },
             tabBarActiveTintColor: ACTIVE,
@@ -81,20 +96,6 @@ export default function TabsLayout() {
           />
 
           <Tabs.Screen
-            name="notifications"
-            options={{
-              title: "Inbox",
-              tabBarIcon: ({ color, size, focused }) => (
-                <Ionicons
-                  name={focused ? "notifications" : "notifications-outline"}
-                  size={size}
-                  color={color}
-                />
-              ),
-            }}
-          />
-
-          <Tabs.Screen
             name="profile"
             options={{
               title: "Me",
@@ -118,22 +119,25 @@ export default function TabsLayout() {
         </Tabs>
       </View>
 
-      {/* Fixed banner at bottom */}
-      <View
-        style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          bottom: 0,
-          paddingBottom: insets.bottom,
-          alignItems: "center",
-        }}
-      >
-        <BannerAd
-          unitId={__DEV__ ? TestIds.BANNER : BANNER_UNIT_ID}
-          size={BannerAdSize.BANNER}
-        />
-      </View>
-    </View>
+      {BannerAd ? (
+        <View
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            // Keep the ad above the home indicator
+            bottom: insets.bottom,
+            height: 50,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <BannerAd
+            unitId={__DEV__ ? TestIds.BANNER : BANNER_UNIT_ID}
+            size={BannerAdSize.BANNER}
+          />
+        </View>
+      ) : null}
+    </SafeAreaView>
   );
 }
