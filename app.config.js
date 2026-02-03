@@ -2,8 +2,8 @@ export default {
   expo: {
     name: "dotChess",
     slug: "chessapp",
-    version: "1.0.4",
-    runtimeVersion: "1",
+    version: "1.0.5",
+    runtimeVersion: "1.0.5",
     orientation: "portrait",
     icon: "./assets/images/logo.png",
     scheme: "dotChess",
@@ -38,9 +38,17 @@ export default {
     web: {
       favicon: "./assets/images/favicon.png",
     },
-
     plugins: [
       "expo-router",
+
+      [
+        "react-native-google-mobile-ads",
+        {
+          iosAppId: "ca-app-pub-7166427778546018~5446654671",
+          androidAppId: "ca-app-pub-7166427778546018~3247140396", // add when you have it
+        },
+      ],
+
       [
         "expo-splash-screen",
         {
@@ -58,8 +66,6 @@ export default {
           android: {
             compileSdkVersion: 36,
             targetSdkVersion: 36,
-
-            // ✅ Fix "Metaspace" / lint memory crashes in Gradle
             gradleProperties: {
               "org.gradle.jvmargs": "-Xmx6g -XX:MaxMetaspaceSize=1g",
             },
