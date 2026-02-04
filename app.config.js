@@ -8,7 +8,6 @@ export default {
     icon: "./assets/images/logo.png",
     scheme: "dotChess",
     userInterfaceStyle: "automatic",
-    newArchEnabled: false,
     ios: {
       supportsTablet: true,
       bundleIdentifier: "com.dotreduce.chessapp",
