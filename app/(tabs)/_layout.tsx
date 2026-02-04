@@ -1,4 +1,4 @@
-import { Tabs } from "expo-router";
+import { Tabs, usePathname } from "expo-router";
 import "react-native-reanimated";
 import {
   configureReanimatedLogger,
@@ -19,20 +19,22 @@ configureReanimatedLogger({ level: ReanimatedLogLevel.warn, strict: false });
 export default function TabsLayout() {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
+  const pathname = usePathname();
 
   const HEADER_BG = "#1C2330";
   const INACTIVE = "rgba(255,255,255,0.65)";
   const ACTIVE = "#FFFFFF";
 
-  // ✅ prod unit id
   const BANNER_UNIT_ID = "ca-app-pub-7166427778546018/2888339328";
 
-  // Banner is 50pt + bottom safe area
-  const bannerHeight = 50 + insets.bottom;
+  // Hide ads on game screen
+  const isGameScreen = pathname?.startsWith("/game/");
+
+  // Banner is 50pt + bottom safe area (only when showing)
+  const bannerHeight = isGameScreen ? 0 : 50 + insets.bottom;
 
   return (
     <SafeAreaView style={{ flex: 1 }}>
-      {/* Push tabs content up so it doesn't sit under the banner */}
       <View style={{ flex: 1, marginBottom: bannerHeight }}>
         <Tabs
           screenOptions={{
@@ -104,27 +106,27 @@ export default function TabsLayout() {
         </Tabs>
       </View>
 
-      {/* Bottom banner ad */}
-      <View
-        style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          bottom: 0,
-          height: bannerHeight,
-          alignItems: "center",
-          justifyContent: "flex-start",
-          paddingBottom: insets.bottom,
-        }}
-      >
-        <View style={{ height: 50, justifyContent: "center" }}>
-          <Text style={{ fontSize: 10, opacity: 0.6, textAlign: "center" }}>
-            Ad
-          </Text>
-
-          <BannerAd unitId={BANNER_UNIT_ID} size={BannerAdSize.BANNER} />
+      {!isGameScreen && (
+        <View
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: bannerHeight,
+            alignItems: "center",
+            justifyContent: "flex-start",
+            paddingBottom: insets.bottom,
+          }}
+        >
+          <View style={{ height: 50, justifyContent: "center" }}>
+            <Text style={{ fontSize: 10, opacity: 0.6, textAlign: "center" }}>
+              Ad
+            </Text>
+            <BannerAd unitId={BANNER_UNIT_ID} size={BannerAdSize.BANNER} />
+          </View>
         </View>
-      </View>
+      )}
     </SafeAreaView>
   );
 }
