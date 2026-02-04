@@ -26,7 +26,7 @@ import {
 
 import { confirm as confirmDialog } from "../compononents/Shared/Confirm";
 import { LoadState, msg } from "../../lib/loadState";
-import { ErrorBanner, SkeletonRow } from "../compononents/Shared/States";
+import ErrorBanner, { SkeletonRow } from "../compononents/Shared/States";
 
 type Friend = { username: string };
 

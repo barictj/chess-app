@@ -421,7 +421,7 @@ export default function Lobby() {
           style={{ flex: 1 }}
           contentContainerStyle={[
             styles.scrollPad,
-            { paddingBottom: BANNER_HEIGHT + 8 }, // ✅ only reserves for banner, not safe-area twice
+            { paddingBottom: 0 }, // ✅ only reserves for banner, not safe-area twice
           ]}
         >
           {/* Invites */}

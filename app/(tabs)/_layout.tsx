@@ -20,7 +20,7 @@ export default function TabsLayout() {
   const ACTIVE = "#FFFFFF";
 
   return (
-    <SafeAreaView style={{ flex: 1 }}>
+    <SafeAreaView style={{ flex: 1 }} edges={["left", "right", "bottom"]}>
       <View style={{ flex: 1 }}>
         <Tabs
           screenOptions={{
@@ -34,10 +34,7 @@ export default function TabsLayout() {
             },
             tabBarActiveTintColor: ACTIVE,
             tabBarInactiveTintColor: INACTIVE,
-            tabBarLabelStyle: {
-              fontWeight: "800",
-              fontSize: 11,
-            },
+            tabBarLabelStyle: { fontWeight: "800", fontSize: 11 },
           }}
         >
           <Tabs.Screen
