@@ -33,9 +33,9 @@ import { confirm } from "../../compononents/Shared/Confirm";
 import { msg } from "../../../lib/loadState";
 import type { LoadState } from "../../../lib/loadState";
 
-import { ErrorBanner, SkeletonRow } from "../../compononents/Shared/States";
+import ErrorBanner, { SkeletonRow } from "../../compononents/Shared/States";
 import { BACKEND_URL } from "../../../lib/config";
-import { StatusModal } from "../../compononents/Shared/StatusModal";
+import StatusModal from "../../compononents/Shared/StatusModal";
 
 function makeRequestId() {
   return `m_${Date.now()}_${Math.random().toString(16).slice(2)}`;

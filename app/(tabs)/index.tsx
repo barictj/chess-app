@@ -10,10 +10,7 @@ import {
   Platform,
   Image,
 } from "react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
 import { BannerAd, BannerAdSize } from "react-native-google-mobile-ads";
@@ -101,10 +98,12 @@ function opponentId(row: any, myId?: number) {
 
 export default function Lobby() {
   const { theme } = useTheme();
-  const insets = useSafeAreaInsets();
 
+  // ---- banner constants (no safe-area math here)
   const BANNER_UNIT_ID = "ca-app-pub-7166427778546018/2888339328";
-  const bannerHeight = 50 + insets.bottom;
+  const TABBAR_HEIGHT = 56;
+  const BANNER_HEIGHT = 50;
+  const bannerPad = BANNER_HEIGHT + 12;
 
   // ---- helpers (must be above loadAll)
   function minsSince(ts?: string) {
@@ -333,15 +332,14 @@ export default function Lobby() {
       setBusy((b) => ({ ...b, bot: false }));
     }
   }
-  // console.log("Invites ", invitesS);
-  // console.log("Games ", gamesS);
+
   console.log("Profile ", profileS);
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
       <SafeAreaView
         style={[styles.safe, { backgroundColor: theme.bg }]}
-        edges={["left", "right", "top"]}
+        edges={["left", "right"]} // ✅ removes the big top gap
       >
         {/* Header card */}
         <View
@@ -423,7 +421,7 @@ export default function Lobby() {
           style={{ flex: 1 }}
           contentContainerStyle={[
             styles.scrollPad,
-            { paddingBottom: 24 + bannerHeight },
+            { paddingBottom: 24 + bannerPad }, // ✅ only reserves for banner, not safe-area twice
           ]}
         >
           {/* Invites */}
@@ -556,11 +554,10 @@ export default function Lobby() {
           position: "absolute",
           left: 0,
           right: 0,
-          bottom: 0,
-          height: bannerHeight,
+          bottom: TABBAR_HEIGHT, // ✅ sits directly above tab bar
+          height: BANNER_HEIGHT,
           alignItems: "center",
           justifyContent: "center",
-          paddingBottom: insets.bottom,
           backgroundColor: theme.bg,
         }}
       >
@@ -579,7 +576,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 14,
     marginHorizontal: 14,
-    marginTop: 10,
+    marginTop: 0, // ✅ was 10; this is the “massive gap” reducer
     ...Platform.select({
       ios: {
         shadowColor: "#000",
