@@ -2,8 +2,8 @@ export default {
   expo: {
     name: "dotChess",
     slug: "chessapp",
-    version: "1.0.5",
-    runtimeVersion: "1.0.5",
+    version: "1.0.6",
+    runtimeVersion: "1.0.6",
     orientation: "portrait",
     icon: "./assets/images/logo.png",
     scheme: "dotChess",
