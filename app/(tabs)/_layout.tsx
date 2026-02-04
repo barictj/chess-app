@@ -5,31 +5,16 @@ import {
   ReanimatedLogLevel,
 } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
-import { View } from "react-native";
+import { View, Text } from "react-native";
 import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
-import Constants from "expo-constants";
+import { BannerAd, BannerAdSize } from "react-native-google-mobile-ads";
 
 import { useTheme } from "../../lib/ThemeContext";
 
 configureReanimatedLogger({ level: ReanimatedLogLevel.warn, strict: false });
-
-const isExpoGo = Constants.appOwnership === "expo";
-
-let BannerAd: any = null;
-let BannerAdSize: any = null;
-let TestIds: any = null;
-
-if (!isExpoGo) {
-  try {
-    const ads = require("react-native-google-mobile-ads");
-    BannerAd = ads.BannerAd;
-    BannerAdSize = ads.BannerAdSize;
-    TestIds = ads.TestIds;
-  } catch {}
-}
 
 export default function TabsLayout() {
   const { theme } = useTheme();
@@ -39,13 +24,15 @@ export default function TabsLayout() {
   const INACTIVE = "rgba(255,255,255,0.65)";
   const ACTIVE = "#FFFFFF";
 
+  // ✅ prod unit id
   const BANNER_UNIT_ID = "ca-app-pub-7166427778546018/2888339328";
 
-  // Reserve ONLY the banner height in the content area.
-  const bannerHeight = BannerAd ? 50 : 0;
+  // Banner is 50pt + bottom safe area
+  const bannerHeight = 50 + insets.bottom;
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
+    <SafeAreaView style={{ flex: 1 }}>
+      {/* Push tabs content up so it doesn't sit under the banner */}
       <View style={{ flex: 1, marginBottom: bannerHeight }}>
         <Tabs
           screenOptions={{
@@ -53,8 +40,6 @@ export default function TabsLayout() {
             tabBarStyle: {
               backgroundColor: HEADER_BG,
               borderTopColor: "rgba(255,255,255,0.10)",
-
-              // KEY: don't paint the safe-area as tab bar background
               height: 56,
               paddingBottom: 0,
               paddingTop: 2,
@@ -119,25 +104,27 @@ export default function TabsLayout() {
         </Tabs>
       </View>
 
-      {BannerAd ? (
-        <View
-          style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            // Keep the ad above the home indicator
-            bottom: insets.bottom,
-            height: 50,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <BannerAd
-            unitId={__DEV__ ? TestIds.BANNER : BANNER_UNIT_ID}
-            size={BannerAdSize.BANNER}
-          />
+      {/* Bottom banner ad */}
+      <View
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: bannerHeight,
+          alignItems: "center",
+          justifyContent: "flex-start",
+          paddingBottom: insets.bottom,
+        }}
+      >
+        <View style={{ height: 50, justifyContent: "center" }}>
+          <Text style={{ fontSize: 10, opacity: 0.6, textAlign: "center" }}>
+            Ad
+          </Text>
+
+          <BannerAd unitId={BANNER_UNIT_ID} size={BannerAdSize.BANNER} />
         </View>
-      ) : null}
+      </View>
     </SafeAreaView>
   );
 }
