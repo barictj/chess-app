@@ -16,7 +16,7 @@ export default function SiteHeader({ title, subtitle, theme, right }: Props) {
         backgroundColor: "#2a3e63", // dark blue-gray header
         paddingHorizontal: 16,
         paddingTop: 10,
-        paddingBottom: 12,
+        paddingBottom: 2,
         borderBottomWidth: 1,
         borderBottomColor: "rgba(255,255,255,0.08)",
       }}

@@ -421,7 +421,7 @@ export default function Lobby() {
           style={{ flex: 1 }}
           contentContainerStyle={[
             styles.scrollPad,
-            { paddingBottom: 24 + bannerPad }, // ✅ only reserves for banner, not safe-area twice
+            { paddingBottom: BANNER_HEIGHT + 8 }, // ✅ only reserves for banner, not safe-area twice
           ]}
         >
           {/* Invites */}
@@ -559,6 +559,8 @@ export default function Lobby() {
           alignItems: "center",
           justifyContent: "center",
           backgroundColor: theme.bg,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: theme.border,
         }}
       >
         <BannerAd unitId={BANNER_UNIT_ID} size={BannerAdSize.BANNER} />
