@@ -10,9 +10,13 @@ import {
   Platform,
   Image,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
+import { BannerAd, BannerAdSize } from "react-native-google-mobile-ads";
 
 import {
   createGame,
@@ -97,6 +101,10 @@ function opponentId(row: any, myId?: number) {
 
 export default function Lobby() {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
+
+  const BANNER_UNIT_ID = "ca-app-pub-7166427778546018/2888339328";
+  const bannerHeight = 50 + insets.bottom;
 
   // ---- helpers (must be above loadAll)
   function minsSince(ts?: string) {
@@ -328,213 +336,240 @@ export default function Lobby() {
   // console.log("Invites ", invitesS);
   // console.log("Games ", gamesS);
   console.log("Profile ", profileS);
+
   return (
-    <SafeAreaView
-      style={[styles.safe, { backgroundColor: theme.bg }]}
-      edges={["left", "right", "bottom"]}
-    >
-      {/* Header card */}
-      <View
-        style={[
-          styles.card,
-          { backgroundColor: theme.card, borderColor: theme.border },
-        ]}
+    <View style={{ flex: 1, backgroundColor: theme.bg }}>
+      <SafeAreaView
+        style={[styles.safe, { backgroundColor: theme.bg }]}
+        edges={["left", "right", "top"]}
       >
-        {profileS.status === "loading" ? (
-          <Text style={[styles.h1, { color: theme.text }]}>Loading…</Text>
-        ) : profileS.status === "error" ? (
-          <ErrorBanner text={profileS.error} onRetry={loadAll} />
-        ) : (
-          <>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "flex-start",
-                gap: 2,
-              }}
-            >
-              {/* LEFT COLUMN: avatar */}
-              {profile?.avatar_url ? (
-                <Image
-                  source={{ uri: profile.avatar_url }}
-                  style={styles.avatarImg}
-                />
-              ) : (
-                <View style={styles.avatarWrap}>
-                  <Text
-                    style={{
-                      color: theme.subtext,
-                      fontWeight: "900",
-                      fontSize: 22,
-                    }}
-                  >
-                    {(profile?.username?.[0] ?? "?").toUpperCase()}
+        {/* Header card */}
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: theme.card, borderColor: theme.border },
+          ]}
+        >
+          {profileS.status === "loading" ? (
+            <Text style={[styles.h1, { color: theme.text }]}>Loading…</Text>
+          ) : profileS.status === "error" ? (
+            <ErrorBanner text={profileS.error} onRetry={loadAll} />
+          ) : (
+            <>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "flex-start",
+                  gap: 2,
+                }}
+              >
+                {/* LEFT COLUMN: avatar */}
+                {profile?.avatar_url ? (
+                  <Image
+                    source={{ uri: profile.avatar_url }}
+                    style={styles.avatarImg}
+                  />
+                ) : (
+                  <View style={styles.avatarWrap}>
+                    <Text
+                      style={{
+                        color: theme.subtext,
+                        fontWeight: "900",
+                        fontSize: 22,
+                      }}
+                    >
+                      {(profile?.username?.[0] ?? "?").toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+
+                {/* RIGHT COLUMN: text */}
+                <View>
+                  <Text style={[styles.h1, { color: theme.text }]}>
+                    @{profile.username}
+                  </Text>
+                  <Text style={[styles.sub, { color: theme.subtext }]}>
+                    Rating: {profile.rating}
+                  </Text>
+                  <Text style={[styles.sub, { color: theme.subtext }]}>
+                    W:{myStatsS.data?.stats?.wins ?? 0} L:
+                    {myStatsS.data?.stats?.losses ?? 0} D:
+                    {myStatsS.data?.stats?.draws ?? 0}
                   </Text>
                 </View>
-              )}
-
-              {/* RIGHT COLUMN: text */}
-              <View>
-                <Text style={[styles.h1, { color: theme.text }]}>
-                  @{profile.username}
-                </Text>
-                <Text style={[styles.sub, { color: theme.subtext }]}>
-                  Rating: {profile.rating}
-                </Text>
-                <Text style={[styles.sub, { color: theme.subtext }]}>
-                  W:{myStatsS.data?.stats?.wins ?? 0} L:
-                  {myStatsS.data?.stats?.losses ?? 0} D:
-                  {myStatsS.data?.stats?.draws ?? 0}
-                </Text>
               </View>
-            </View>
-          </>
-        )}
-      </View>
-
-      {/* Actions */}
-      <View style={styles.actions}>
-        <CwfButton
-          theme={theme}
-          title={busy.random ? "Finding..." : "Find Game"}
-          onPress={onRandomGame}
-          disabled={!!busy.random}
-        />
-        <CwfButton
-          theme={theme}
-          variant="secondary"
-          title={busy.bot ? "Starting..." : "Play A.I. Bot"}
-          onPress={onPlayBot}
-          disabled={!!busy.bot}
-        />
-      </View>
-
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollPad}>
-        {/* Invites */}
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.h2, { color: theme.text }]}>Game Invites</Text>
-        </View>
-
-        <View
-          style={[
-            styles.card,
-            { backgroundColor: theme.card, borderColor: theme.border },
-          ]}
-        >
-          {invitesS.status === "loading" ? (
-            <>
-              <SkeletonRow />
-              <SkeletonRow />
             </>
-          ) : invitesS.status === "error" ? (
-            <ErrorBanner text={invitesS.error} onRetry={loadAll} />
-          ) : invitesS.status === "empty" ? (
-            <Text style={[styles.empty, { color: theme.subtext }]}>
-              No game invites
-            </Text>
-          ) : (
-            <FlatList
-              data={invites}
-              scrollEnabled={false}
-              keyExtractor={(item) => `invite-${item.id}`}
-              renderItem={({ item }) => (
-                <InviteCard
-                  invite={item}
-                  inviteUsername={getOpponentUsername(item, profile)}
-                  onAccept={async () => {
-                    try {
-                      setBusy((b) => ({ ...b, acceptId: String(item.id) }));
-                      await acceptInvitedGame(item.id);
-                      await loadAll();
-                      router.push(`/game/${item.id}`);
-                    } catch (e) {
-                      setInvitesS(
-                        (s) =>
-                          ({
-                            status: "error",
-                            data: s.data,
-                            error: msg(e),
-                          }) as any,
-                      );
-                    } finally {
-                      setBusy((b) => ({ ...b, acceptId: undefined }));
-                    }
-                  }}
-                  onDeny={async () => {
-                    try {
-                      setBusy((b) => ({ ...b, denyId: String(item.id) }));
-                      await denyInvitedGame(item.id);
-                      await loadAll();
-                    } catch (e) {
-                      setInvitesS(
-                        (s) =>
-                          ({
-                            status: "error",
-                            data: s.data,
-                            error: msg(e),
-                          }) as any,
-                      );
-                    } finally {
-                      setBusy((b) => ({ ...b, denyId: undefined }));
-                    }
-                  }}
-                />
-              )}
-            />
           )}
         </View>
 
-        {/* Games */}
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.h2, { color: theme.text }]}>Active Games</Text>
+        {/* Actions */}
+        <View style={styles.actions}>
+          <CwfButton
+            theme={theme}
+            title={busy.random ? "Finding..." : "Find Game"}
+            onPress={onRandomGame}
+            disabled={!!busy.random}
+          />
+          <CwfButton
+            theme={theme}
+            variant="secondary"
+            title={busy.bot ? "Starting..." : "Play A.I. Bot"}
+            onPress={onPlayBot}
+            disabled={!!busy.bot}
+          />
         </View>
 
-        <View
-          style={[
-            styles.card,
-            { backgroundColor: theme.card, borderColor: theme.border },
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={[
+            styles.scrollPad,
+            { paddingBottom: 24 + bannerHeight },
           ]}
         >
-          {gamesS.status === "loading" ? (
-            <>
-              <SkeletonRow />
-              <SkeletonRow />
-              <SkeletonRow />
-            </>
-          ) : gamesS.status === "error" ? (
-            <ErrorBanner text={gamesS.error} onRetry={loadAll} />
-          ) : gamesS.status === "empty" ? (
-            <View>
+          {/* Invites */}
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.h2, { color: theme.text }]}>Game Invites</Text>
+          </View>
+
+          <View
+            style={[
+              styles.card,
+              { backgroundColor: theme.card, borderColor: theme.border },
+            ]}
+          >
+            {invitesS.status === "loading" ? (
+              <>
+                <SkeletonRow />
+                <SkeletonRow />
+              </>
+            ) : invitesS.status === "error" ? (
+              <ErrorBanner text={invitesS.error} onRetry={loadAll} />
+            ) : invitesS.status === "empty" ? (
               <Text style={[styles.empty, { color: theme.subtext }]}>
-                No active games
+                No game invites
               </Text>
-              <View style={{ height: 10 }} />
-              <CwfButton
-                theme={theme}
-                title={busy.random ? "Finding..." : "Find Random Game"}
-                onPress={onRandomGame}
-                disabled={!!busy.random}
+            ) : (
+              <FlatList
+                data={invites}
+                scrollEnabled={false}
+                keyExtractor={(item) => `invite-${item.id}`}
+                renderItem={({ item }) => (
+                  <InviteCard
+                    invite={item}
+                    inviteUsername={getOpponentUsername(item, profile)}
+                    onAccept={async () => {
+                      try {
+                        setBusy((b) => ({ ...b, acceptId: String(item.id) }));
+                        await acceptInvitedGame(item.id);
+                        await loadAll();
+                        router.push(`/game/${item.id}`);
+                      } catch (e) {
+                        setInvitesS(
+                          (s) =>
+                            ({
+                              status: "error",
+                              data: s.data,
+                              error: msg(e),
+                            }) as any,
+                        );
+                      } finally {
+                        setBusy((b) => ({ ...b, acceptId: undefined }));
+                      }
+                    }}
+                    onDeny={async () => {
+                      try {
+                        setBusy((b) => ({ ...b, denyId: String(item.id) }));
+                        await denyInvitedGame(item.id);
+                        await loadAll();
+                      } catch (e) {
+                        setInvitesS(
+                          (s) =>
+                            ({
+                              status: "error",
+                              data: s.data,
+                              error: msg(e),
+                            }) as any,
+                        );
+                      } finally {
+                        setBusy((b) => ({ ...b, denyId: undefined }));
+                      }
+                    }}
+                  />
+                )}
               />
-            </View>
-          ) : (
-            <FlatList
-              data={games}
-              scrollEnabled={false}
-              keyExtractor={(item) => String(item.id)}
-              renderItem={({ item }) => (
-                <GameCard
-                  game={item}
-                  myUserId={profile.id}
-                  onPress={() => router.push(`/game/${item.id}`)}
+            )}
+          </View>
+
+          {/* Games */}
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.h2, { color: theme.text }]}>Active Games</Text>
+          </View>
+
+          <View
+            style={[
+              styles.card,
+              { backgroundColor: theme.card, borderColor: theme.border },
+            ]}
+          >
+            {gamesS.status === "loading" ? (
+              <>
+                <SkeletonRow />
+                <SkeletonRow />
+                <SkeletonRow />
+              </>
+            ) : gamesS.status === "error" ? (
+              <ErrorBanner text={gamesS.error} onRetry={loadAll} />
+            ) : gamesS.status === "empty" ? (
+              <View>
+                <Text style={[styles.empty, { color: theme.subtext }]}>
+                  No active games
+                </Text>
+                <View style={{ height: 10 }} />
+                <CwfButton
+                  theme={theme}
+                  title={busy.random ? "Finding..." : "Find Random Game"}
+                  onPress={onRandomGame}
+                  disabled={!!busy.random}
                 />
-              )}
-            />
-          )}
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+              </View>
+            ) : (
+              <FlatList
+                data={games}
+                scrollEnabled={false}
+                keyExtractor={(item) => String(item.id)}
+                renderItem={({ item }) => (
+                  <GameCard
+                    game={item}
+                    myUserId={profile.id}
+                    onPress={() => router.push(`/game/${item.id}`)}
+                  />
+                )}
+              />
+            )}
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+
+      {/* Bottom banner ad (ONLY on Lobby) */}
+      <View
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: bannerHeight,
+          alignItems: "center",
+          justifyContent: "center",
+          paddingBottom: insets.bottom,
+          backgroundColor: theme.bg,
+        }}
+      >
+        <BannerAd unitId={BANNER_UNIT_ID} size={BannerAdSize.BANNER} />
+      </View>
+    </View>
   );
 }
+
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   scrollPad: { paddingBottom: 24, paddingHorizontal: 6 },
