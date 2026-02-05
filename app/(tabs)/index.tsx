@@ -554,7 +554,7 @@ export default function Lobby() {
           position: "absolute",
           left: 0,
           right: 0,
-          bottom: TABBAR_HEIGHT, // ✅ sits directly above tab bar
+          bottom: 0, // ✅ sits directly above tab bar
           height: BANNER_HEIGHT,
           alignItems: "center",
           justifyContent: "center",
