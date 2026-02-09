@@ -2,14 +2,14 @@ export default {
   expo: {
     name: "dotChess",
     slug: "chessapp",
-    version: "1.0.15.1",
-    runtimeVersion: "1.0.15.1",
+    version: "1.0.15.2",
+    runtimeVersion: "1.0.15.2",
     orientation: "portrait",
     icon: "./assets/images/logo.png",
     scheme: "dotchess",
     userInterfaceStyle: "automatic",
     ios: {
-      supportsTablet: true,
+      supportsTablet: false,
       bundleIdentifier: "com.dotreduce.chessapp",
       usesAppleSignIn: true,
       infoPlist: {
