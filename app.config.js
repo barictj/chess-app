@@ -2,11 +2,11 @@ export default {
   expo: {
     name: "dotChess",
     slug: "chessapp",
-    version: "1.0.15",
-    runtimeVersion: "1.0.15",
+    version: "1.0.15.1",
+    runtimeVersion: "1.0.15.1",
     orientation: "portrait",
     icon: "./assets/images/logo.png",
-    scheme: "dotChess",
+    scheme: "dotchess",
     userInterfaceStyle: "automatic",
     ios: {
       supportsTablet: true,
@@ -22,11 +22,11 @@ export default {
     },
     android: {
       package: "com.dotreduce.chessapp",
-      versionCode: 6,
+      versionCode: 9,
       intentFilters: [
         {
           action: "VIEW",
-          data: [{ scheme: "dotChess", host: "login" }],
+          data: [{ scheme: "dotchess", host: "login" }],
           category: ["BROWSABLE", "DEFAULT"],
         },
       ],
@@ -36,7 +36,12 @@ export default {
         backgroundImage: "./assets/images/android-icon-background.png",
         monochromeImage: "./assets/images/android-icon-monochrome.png",
       },
-      permissions: ["INTERNET", "ACCESS_NETWORK_STATE", "CAMERA"],
+      permissions: [
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "CAMERA",
+        "com.google.android.gms.permission.AD_ID",
+      ],
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
     },
