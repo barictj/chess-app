@@ -10,7 +10,7 @@ export default {
     userInterfaceStyle: "automatic",
     ios: {
       supportsTablet: false,
-      bundleIdentifier: "com.dotreduce.chessapp",
+      bundleIdentifier: "com.dotreduce.chessapp.ios",
       usesAppleSignIn: true,
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false, // 👈 ADD THIS
@@ -98,11 +98,5 @@ export default {
     },
 
     assetBundlePatterns: ["**/*"],
-
-    extra: {
-      eas: {
-        projectId: "42242422-69e6-40eb-9519-30c56da02f5e",
-      },
-    },
   },
 };
