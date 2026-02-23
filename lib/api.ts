@@ -2,7 +2,17 @@ import { getToken } from "./token";
 import { BACKEND_URL } from "./config";
 
 console.log("Using BACKEND_URL:", BACKEND_URL);
-export async function createGame(opponentUsername: string) {
+export type GameCreateOptions = {
+  game_mode?: "casual" | "ranked";
+  time_control?: "bullet" | "blitz" | "rapid" | "daily";
+  initial_time_ms?: number | null;
+  increment_ms?: number | null;
+};
+
+export async function createGame(
+  opponentUsername: string,
+  options: GameCreateOptions = {},
+) {
   const token = await getToken();
   if (!token) throw new Error("Not authenticated");
   const res = await fetch(`${BACKEND_URL}/api/games`, {
@@ -11,7 +21,7 @@ export async function createGame(opponentUsername: string) {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ opponent_username: opponentUsername }),
+    body: JSON.stringify({ opponent_username: opponentUsername, ...options }),
   });
 
   if (!res.ok) {
@@ -21,7 +31,10 @@ export async function createGame(opponentUsername: string) {
 
   return res.json(); // returns the object you pasted
 }
-export async function createInvitedGame(opponent_username: string) {
+export async function createInvitedGame(
+  opponent_username: string,
+  options: GameCreateOptions = {},
+) {
   const token = await getToken();
   if (!token) throw new Error("Not authenticated");
   const res = await fetch(`${BACKEND_URL}/api/games/invite`, {
@@ -30,7 +43,7 @@ export async function createInvitedGame(opponent_username: string) {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ opponent_username }),
+    body: JSON.stringify({ opponent_username, ...options }),
   });
   if (!res.ok) {
     const text = await res.text();
@@ -104,7 +117,7 @@ export async function getActiveGames() {
 
   return JSON.parse(text);
 }
-export async function findRandomGame() {
+export async function findRandomGame(options: GameCreateOptions = {}) {
   const token = await getToken();
   if (!token) throw new Error("Not authenticated");
   const res = await fetch(`${BACKEND_URL}/api/games/random`, {
@@ -113,6 +126,7 @@ export async function findRandomGame() {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
+    body: JSON.stringify(options),
   });
 
   if (!res.ok) {
@@ -151,7 +165,7 @@ export async function setUsername(username: string) {
   if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
   return JSON.parse(text);
 }
-export async function playAgainstBot() {
+export async function playAgainstBot(options: GameCreateOptions = {}) {
   const token = await getToken();
   if (!token) throw new Error("Not authenticated");
   const res = await fetch(`${BACKEND_URL}/api/games/play_bot`, {
@@ -160,6 +174,7 @@ export async function playAgainstBot() {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
+    body: JSON.stringify(options),
   });
   if (!res.ok) {
     const text = await res.text();
@@ -250,6 +265,65 @@ export async function respondToDrawOffer(gameId: string, accept: boolean) {
     }
     return res.json();
   }
+}
+
+export type DrawClaimReason =
+  | "threefold"
+  | "fifty_move"
+  | "insufficient_material";
+
+export async function claimDraw(gameId: string, reason: DrawClaimReason) {
+  const token = await getToken();
+  if (!token) throw new Error("Not authenticated");
+
+  const candidatePaths: Record<DrawClaimReason, string[]> = {
+    threefold: [
+      `/api/games/${gameId}/draw/claim/threefold`,
+      `/api/games/${gameId}/draw/claim?reason=threefold`,
+    ],
+    fifty_move: [
+      `/api/games/${gameId}/draw/claim/fifty-move`,
+      `/api/games/${gameId}/draw/claim/fifty_move`,
+      `/api/games/${gameId}/draw/claim?reason=fifty_move`,
+    ],
+    insufficient_material: [
+      `/api/games/${gameId}/draw/claim/insufficient-material`,
+      `/api/games/${gameId}/draw/claim/insufficient_material`,
+      `/api/games/${gameId}/draw/claim?reason=insufficient_material`,
+    ],
+  };
+
+  let lastError = "";
+
+  for (const path of candidatePaths[reason]) {
+    const res = await fetch(`${BACKEND_URL}${path}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ gameId, reason }),
+    });
+
+    const text = await res.text();
+
+    if (res.ok) {
+      try {
+        return JSON.parse(text);
+      } catch {
+        return { ok: true };
+      }
+    }
+
+    if (res.status === 404) {
+      lastError = text || `HTTP ${res.status}`;
+      continue;
+    }
+
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+
+  throw new Error(lastError || "Draw claim endpoint not available");
 }
 export async function requestFriend(friendUsername: string) {
   const token = await getToken();

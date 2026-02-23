@@ -15,6 +15,8 @@ type Props = {
   inviteUsername: string;
   onAccept: () => void;
   onDeny: () => void;
+  accepting?: boolean;
+  denying?: boolean;
 };
 
 export default function InviteCard({
@@ -22,13 +24,17 @@ export default function InviteCard({
   inviteUsername,
   onAccept,
   onDeny,
+  accepting,
+  denying,
 }: Props) {
   const { theme } = useTheme();
   const [avatarUrl, setAvatarUrl] = React.useState<string | null>(null);
+
   const inviterId =
     invite.white_user_id === invite.invited_user_id
       ? invite.black_user_id
       : invite.white_user_id;
+
   React.useEffect(() => {
     let alive = true;
 
@@ -36,16 +42,16 @@ export default function InviteCard({
       try {
         const url = await getUserAvatarUrl(inviterId);
         if (alive) setAvatarUrl(url);
-      } catch (e) {
-        console.error("Failed to fetch avatar URL:", e);
+      } catch {
+        if (alive) setAvatarUrl(null);
       }
     })();
 
     return () => {
       alive = false;
     };
-  }, [invite.from_user_id]);
-  console.log("Rendering InviteCard for invite ID:", invite);
+  }, [inviterId]);
+
   return (
     <View
       style={[
@@ -61,7 +67,7 @@ export default function InviteCard({
             <Image
               source={{ uri: avatarUrl }}
               style={styles.avatarImage}
-              onError={() => setAvatarUrl(null)} // fallback on bad URL
+              onError={() => setAvatarUrl(null)}
             />
           ) : (
             <Text style={{ color: theme.subtext, fontWeight: "900" }}>
@@ -75,41 +81,44 @@ export default function InviteCard({
             {inviteUsername}
           </Text>
 
-          <Text style={{ fontWeight: "800" }}>
+          <Text style={{ fontWeight: "800", color: theme.subtext }}>
             Record: {invite.opponent_stats?.stats?.wins ?? 0}W/
             {invite.opponent_stats?.stats?.losses ?? 0}L/
             {invite.opponent_stats?.stats?.draws ?? 0}D
           </Text>
-          <Text style={[styles.sub, { color: theme.subtext }]}>
-            Game invite #{invite.id}
-          </Text>
-        </View>
 
-        <Text style={[styles.chev, { color: theme.subtext }]}>›</Text>
+          <Text style={[styles.sub, { color: theme.subtext }]}>Game invite #{invite.id}</Text>
+        </View>
       </View>
 
       <View style={styles.actions}>
         <Pressable
           onPress={onDeny}
+          disabled={!!accepting || !!denying}
           style={({ pressed }) => [
             styles.btn,
             styles.btnSecondary,
             { backgroundColor: theme.card, borderColor: theme.border },
-            pressed && styles.pressed,
+            (pressed || accepting || denying) && styles.pressed,
           ]}
         >
-          <Text style={[styles.btnText, { color: theme.text }]}>Deny</Text>
+          <Text style={[styles.btnText, { color: theme.text }]}>
+            {denying ? "Denying..." : "Deny"}
+          </Text>
         </Pressable>
 
         <Pressable
           onPress={onAccept}
+          disabled={!!accepting || !!denying}
           style={({ pressed }) => [
             styles.btn,
             { backgroundColor: theme.primary, borderColor: theme.primary },
-            pressed && styles.pressed,
+            (pressed || accepting || denying) && styles.pressed,
           ]}
         >
-          <Text style={[styles.btnText, { color: "#fff" }]}>Accept</Text>
+          <Text style={[styles.btnText, { color: "#fff" }]}>
+            {accepting ? "Accepting..." : "Accept"}
+          </Text>
         </Pressable>
       </View>
     </View>
@@ -164,11 +173,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 1,
   },
+
   btnSecondary: {},
   btnText: { fontSize: 14, fontWeight: "900", letterSpacing: 0.2 },
 
-  pressed: { transform: [{ scale: 0.99 }], opacity: 0.97 },
-  chev: { marginLeft: 10, fontSize: 22, fontWeight: "900" },
+  pressed: { transform: [{ scale: 0.99 }], opacity: 0.75 },
+
   avatarImage: {
     width: "100%",
     height: "100%",

@@ -20,9 +20,12 @@ import {
   rematchGame,
   offerDraw,
   respondToDrawOffer,
+  claimDraw,
+  type DrawClaimReason,
   getFriendsList,
   getIncomingFriendRequests,
   getOutgoingFriendRequests,
+  getUserProfile,
   requestFriend,
   acceptFriendRequest,
   denyFriendRequest,
@@ -36,6 +39,7 @@ import type { LoadState } from "../../../lib/loadState";
 import ErrorBanner, { SkeletonRow } from "../../compononents/Shared/States";
 import { BACKEND_URL } from "../../../lib/config";
 import StatusModal from "../../compononents/Shared/StatusModal";
+import { maybeShowInterstitial, preloadInterstitial } from "../../../lib/ads";
 
 function makeRequestId() {
   return `m_${Date.now()}_${Math.random().toString(16).slice(2)}`;
@@ -47,6 +51,7 @@ export default function GameScreen() {
 
   const [showCastleTip, setShowCastleTip] = React.useState(false);
   const [showDrawModal, setShowDrawModal] = React.useState(false);
+  const [showClaimModal, setShowClaimModal] = React.useState(false);
   const [showRematch, setShowRematch] = React.useState(false);
 
   const [myColor, setMyColor] = React.useState<"w" | "b" | null>(null);
@@ -73,6 +78,8 @@ export default function GameScreen() {
   // ✅ CHECK / CHECKMATE MODAL (keep near top so it's defined before hooks that use it)
   const [statusMsg, setStatusMsg] = React.useState<string | null>(null);
   const lastStatusRef = React.useRef<"none" | "check" | "checkmate">("none");
+  const [clockTick, setClockTick] = React.useState(0);
+  const [isPaidSubscriber, setIsPaidSubscriber] = React.useState(false);
 
   function maybeShowCheckModal(fen: string) {
     try {
@@ -106,6 +113,7 @@ export default function GameScreen() {
     rematch?: boolean;
     offerDraw?: boolean;
     drawRespond?: boolean;
+    claimDraw?: boolean;
     addFriend?: boolean;
     acceptFriend?: boolean;
     denyFriend?: boolean;
@@ -216,10 +224,18 @@ export default function GameScreen() {
   }, [id]);
 
   React.useEffect(() => {
+    getUserProfile()
+      .then((p) => setIsPaidSubscriber(!!p?.paid_subscriber))
+      .catch(() => {});
+
     loadGame().catch((e) =>
       setGameS({ status: "error", data: null, error: msg(e) }),
     );
   }, [loadGame]);
+
+  React.useEffect(() => {
+    preloadInterstitial(isPaidSubscriber);
+  }, [isPaidSubscriber]);
 
   // ---- send move
   async function sendMove(from: string, to: string, promotion?: string) {
@@ -263,6 +279,8 @@ export default function GameScreen() {
           turn: data.turn,
           status: data.status,
           result: data.result,
+          white_time_ms: data.white_time_ms ?? s.data?.white_time_ms ?? null,
+          black_time_ms: data.black_time_ms ?? s.data?.black_time_ms ?? null,
           last_move_san: data.move?.san,
           last_move_from: data.last_move_from ?? s.data?.last_move_from ?? null,
           last_move_to: data.last_move_to ?? s.data?.last_move_to ?? null,
@@ -311,6 +329,7 @@ export default function GameScreen() {
     try {
       setBusy((b) => ({ ...b, rematch: true }));
       const newGame = await rematchGame(String(id));
+      await maybeShowInterstitial(isPaidSubscriber);
       router.replace(`/game/${newGame.id}`);
     } catch (e) {
       setGameS(
@@ -497,6 +516,124 @@ export default function GameScreen() {
   const START_FEN = React.useMemo(() => new Chess().fen(), []);
   const boardFen = game?.fen && game.fen !== "startpos" ? game.fen : START_FEN;
 
+  const timedMode = Number.isFinite(Number(game?.initial_time_ms));
+
+  React.useEffect(() => {
+    if (!timedMode || isGameOver) return;
+    const timer = setInterval(() => setClockTick((n) => n + 1), 1000);
+    return () => clearInterval(timer);
+  }, [timedMode, isGameOver]);
+
+  const liveClock = React.useMemo(() => {
+    const baseWhite = Math.max(0, Number(game?.white_time_ms ?? 0));
+    const baseBlack = Math.max(0, Number(game?.black_time_ms ?? 0));
+
+    if (!timedMode || !game?.last_clock_at || isGameOver) {
+      return { whiteMs: baseWhite, blackMs: baseBlack };
+    }
+
+    const elapsed = Math.max(
+      0,
+      Date.now() - new Date(game.last_clock_at).getTime(),
+    );
+
+    if (game.turn === "w") {
+      return { whiteMs: Math.max(0, baseWhite - elapsed), blackMs: baseBlack };
+    }
+    if (game.turn === "b") {
+      return { whiteMs: baseWhite, blackMs: Math.max(0, baseBlack - elapsed) };
+    }
+    return { whiteMs: baseWhite, blackMs: baseBlack };
+  }, [
+    timedMode,
+    game?.white_time_ms,
+    game?.black_time_ms,
+    game?.last_clock_at,
+    game?.turn,
+    isGameOver,
+    clockTick,
+  ]);
+
+  function fmtClock(ms?: number | null) {
+    const n = Math.max(0, Number(ms ?? 0));
+    const totalSec = Math.floor(n / 1000);
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  }
+
+  const drawClaimOptions = React.useMemo(() => {
+    if (!game || isGameOver) return [] as Array<{
+      reason: DrawClaimReason;
+      label: string;
+      detail: string;
+    }>;
+
+    try {
+      const chess = new Chess(boardFen);
+      const opts: Array<{
+        reason: DrawClaimReason;
+        label: string;
+        detail: string;
+      }> = [];
+
+      if ((chess as any).isThreefoldRepetition?.()) {
+        opts.push({
+          reason: "threefold",
+          label: "Threefold",
+          detail: "Same position occurred three times.",
+        });
+      }
+
+      const halfmoveClock = Number(boardFen.split(" ")[4] ?? 0);
+      if (Number.isFinite(halfmoveClock) && halfmoveClock >= 100) {
+        opts.push({
+          reason: "fifty_move",
+          label: "50-move",
+          detail: "No pawn move or capture in 50 full moves.",
+        });
+      }
+
+      if ((chess as any).isInsufficientMaterial?.()) {
+        opts.push({
+          reason: "insufficient_material",
+          label: "Insufficient material",
+          detail: "Neither side has mating material.",
+        });
+      }
+
+      return opts;
+    } catch {
+      return [];
+    }
+  }, [boardFen, game, isGameOver]);
+
+  async function onClaimDraw(reason: DrawClaimReason, label: string) {
+    if (!game) return;
+
+    const ok = await confirm({
+      title: "Claim draw?",
+      message: `Claim a draw by ${label}?`,
+      confirmText: "Claim",
+    });
+    if (!ok) return;
+
+    try {
+      setBusy((b) => ({ ...b, claimDraw: true }));
+      await claimDraw(String(game.id), reason);
+      setShowClaimModal(false);
+      await loadGame();
+      setStatusMsg(`Draw claimed: ${label}.`);
+    } catch (e) {
+      setStatusMsg(msg(e));
+      setGameS(
+        (s) => ({ status: "error", data: s.data, error: msg(e) }) as any,
+      );
+    } finally {
+      setBusy((b) => ({ ...b, claimDraw: false }));
+    }
+  }
+
   // ✅ If the user navigates back/forward and game.fen changes, keep status in sync (no render-time call)
   React.useEffect(() => {
     if (!game?.fen || game.fen === "startpos") return;
@@ -641,6 +778,10 @@ export default function GameScreen() {
               : isMyTurn
                 ? "Your move"
                 : "Waiting for opponent"}
+            {game?.game_mode ? ` • ${String(game.game_mode).toUpperCase()}` : ""}
+            {game?.time_control
+              ? ` • ${String(game.time_control).toUpperCase()}`
+              : ""}
           </Text>
         </View>
 
@@ -721,6 +862,21 @@ export default function GameScreen() {
                 </View>
               )}
 
+              {!isGameOver && game.draw_offer_status === "pending" ? (
+                <Text
+                  style={{
+                    marginBottom: 10,
+                    color: theme.subtext,
+                    fontWeight: "800",
+                    textAlign: "center",
+                  }}
+                >
+                  {String(game.draw_offer_by) === String(opponentId)
+                    ? "Opponent offered a draw."
+                    : "You offered a draw."}
+                </Text>
+              ) : null}
+
               {/* INFO ROW */}
               <View
                 style={{
@@ -798,6 +954,67 @@ export default function GameScreen() {
                   </Text>
                 </View>
               </View>
+
+              {timedMode ? (
+                <View style={{ marginTop: 10, flexDirection: "row", gap: 10 }}>
+                  <View
+                    style={{
+                      flex: 1,
+                      borderRadius: 12,
+                      paddingVertical: 8,
+                      paddingHorizontal: 10,
+                      borderWidth: 1,
+                      borderColor: theme.border,
+                      backgroundColor:
+                        game.turn === "w" && !isGameOver
+                          ? "rgba(47,107,255,0.14)"
+                          : theme.card,
+                    }}
+                  >
+                    <Text style={{ color: theme.subtext, fontWeight: "800" }}>
+                      White Clock
+                    </Text>
+                    <Text
+                      style={{
+                        marginTop: 3,
+                        color: theme.text,
+                        fontWeight: "900",
+                        fontSize: 20,
+                      }}
+                    >
+                      {fmtClock(liveClock.whiteMs)}
+                    </Text>
+                  </View>
+                  <View
+                    style={{
+                      flex: 1,
+                      borderRadius: 12,
+                      paddingVertical: 8,
+                      paddingHorizontal: 10,
+                      borderWidth: 1,
+                      borderColor: theme.border,
+                      backgroundColor:
+                        game.turn === "b" && !isGameOver
+                          ? "rgba(47,107,255,0.14)"
+                          : theme.card,
+                    }}
+                  >
+                    <Text style={{ color: theme.subtext, fontWeight: "800" }}>
+                      Black Clock
+                    </Text>
+                    <Text
+                      style={{
+                        marginTop: 3,
+                        color: theme.text,
+                        fontWeight: "900",
+                        fontSize: 20,
+                      }}
+                    >
+                      {fmtClock(liveClock.blackMs)}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
             </View>
 
             <Text style={{ marginTop: 12, fontSize: 14, color: theme.text }}>
@@ -887,38 +1104,13 @@ export default function GameScreen() {
             </View>
 
             {/* Actions */}
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              {!isGameOver ? (
-                <>
-                  <Pressable
-                    onPress={resign}
-                    disabled={!!busy.resign}
-                    style={({ pressed }) => [
-                      {
-                        flex: 1,
-                        paddingVertical: 12,
-                        borderRadius: 16,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        borderWidth: 1,
-                        borderColor: "#E5484D",
-                        backgroundColor: "#E5484D",
-                        opacity: busy.resign ? 0.55 : 1,
-                      },
-                      pressed && !busy.resign
-                        ? { transform: [{ scale: 0.99 }], opacity: 0.97 }
-                        : null,
-                    ]}
-                  >
-                    <Text style={{ color: "#fff", fontWeight: "900" }}>
-                      {busy.resign ? "Resigning…" : "Resign"}
-                    </Text>
-                  </Pressable>
-
-                  {game.draw_offer_status == null ? (
+            <View style={{ gap: 10 }}>
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                {!isGameOver ? (
+                  <>
                     <Pressable
-                      onPress={askToDraw}
-                      disabled={!!busy.offerDraw}
+                      onPress={resign}
+                      disabled={!!busy.resign}
                       style={({ pressed }) => [
                         {
                           flex: 1,
@@ -927,64 +1119,127 @@ export default function GameScreen() {
                           alignItems: "center",
                           justifyContent: "center",
                           borderWidth: 1,
-                          borderColor: "rgba(255,255,255,0.14)",
-                          backgroundColor: "#1C2330",
-                          opacity: busy.offerDraw ? 0.55 : 1,
+                          borderColor: "#E5484D",
+                          backgroundColor: "#E5484D",
+                          opacity: busy.resign ? 0.55 : 1,
                         },
-                        pressed && !busy.offerDraw
+                        pressed && !busy.resign
                           ? { transform: [{ scale: 0.99 }], opacity: 0.97 }
                           : null,
                       ]}
                     >
                       <Text style={{ color: "#fff", fontWeight: "900" }}>
-                        {busy.offerDraw ? "Offering…" : "Offer Draw"}
+                        {busy.resign ? "Resigning..." : "Resign"}
                       </Text>
                     </Pressable>
-                  ) : (
-                    <View
-                      style={{
+
+                    {game.draw_offer_status == null ||
+                    game.draw_offer_status === "declined" ? (
+                      <Pressable
+                        onPress={askToDraw}
+                        disabled={!!busy.offerDraw}
+                        style={({ pressed }) => [
+                          {
+                            flex: 1,
+                            paddingVertical: 12,
+                            borderRadius: 16,
+                            alignItems: "center",
+                            justifyContent: "center",
+                            borderWidth: 1,
+                            borderColor: "rgba(255,255,255,0.14)",
+                            backgroundColor: "#1C2330",
+                            opacity: busy.offerDraw ? 0.55 : 1,
+                          },
+                          pressed && !busy.offerDraw
+                            ? { transform: [{ scale: 0.99 }], opacity: 0.97 }
+                            : null,
+                        ]}
+                      >
+                        <Text style={{ color: "#fff", fontWeight: "900" }}>
+                          {busy.offerDraw ? "Offering..." : "Offer Draw"}
+                        </Text>
+                      </Pressable>
+                    ) : (
+                      <View
+                        style={{
+                          flex: 1,
+                          paddingVertical: 12,
+                          borderRadius: 16,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          borderWidth: 1,
+                          borderColor: theme.border,
+                          backgroundColor: theme.card,
+                        }}
+                      >
+                        <Text
+                          style={{ color: theme.subtext, fontWeight: "900" }}
+                        >
+                          Draw offer pending
+                        </Text>
+                      </View>
+                    )}
+                  </>
+                ) : (
+                  <Pressable
+                    onPress={rematch}
+                    disabled={!!busy.rematch}
+                    style={({ pressed }) => [
+                      {
                         flex: 1,
                         paddingVertical: 12,
                         borderRadius: 16,
                         alignItems: "center",
                         justifyContent: "center",
                         borderWidth: 1,
-                        borderColor: theme.border,
-                        backgroundColor: theme.card,
-                      }}
-                    >
-                      <Text style={{ color: theme.subtext, fontWeight: "900" }}>
-                        Draw sent
-                      </Text>
-                    </View>
-                  )}
-                </>
-              ) : (
+                        borderColor: theme.primary,
+                        backgroundColor: theme.primary,
+                        opacity: busy.rematch ? 0.55 : 1,
+                      },
+                      pressed && !busy.rematch
+                        ? { transform: [{ scale: 0.99 }], opacity: 0.97 }
+                        : null,
+                    ]}
+                  >
+                    <Text style={{ color: "#fff", fontWeight: "900" }}>
+                      {busy.rematch ? "Rematching..." : "Rematch"}
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
+
+              {!isGameOver ? (
                 <Pressable
-                  onPress={rematch}
-                  disabled={!!busy.rematch}
+                  onPress={() => setShowClaimModal(true)}
+                  disabled={drawClaimOptions.length === 0 || !!busy.claimDraw}
                   style={({ pressed }) => [
                     {
-                      flex: 1,
                       paddingVertical: 12,
                       borderRadius: 16,
                       alignItems: "center",
                       justifyContent: "center",
                       borderWidth: 1,
-                      borderColor: theme.primary,
-                      backgroundColor: theme.primary,
-                      opacity: busy.rematch ? 0.55 : 1,
+                      borderColor: theme.border,
+                      backgroundColor: theme.card,
+                      opacity:
+                        drawClaimOptions.length === 0 || busy.claimDraw
+                          ? 0.6
+                          : 1,
                     },
-                    pressed && !busy.rematch
+                    pressed && drawClaimOptions.length > 0 && !busy.claimDraw
                       ? { transform: [{ scale: 0.99 }], opacity: 0.97 }
                       : null,
                   ]}
                 >
-                  <Text style={{ color: "#fff", fontWeight: "900" }}>
-                    {busy.rematch ? "Rematching…" : "Rematch"}
+                  <Text style={{ color: theme.text, fontWeight: "900" }}>
+                    {busy.claimDraw
+                      ? "Claiming..."
+                      : drawClaimOptions.length
+                        ? `Claim Draw (${drawClaimOptions.length})`
+                        : "No draw claims available"}
                   </Text>
                 </Pressable>
-              )}
+              ) : null}
             </View>
 
             {/* Friend Request CTA (bottom) */}
@@ -1233,6 +1488,97 @@ export default function GameScreen() {
         </View>
       </Modal>
 
+      {/* Draw Claim Modal */}
+      <Modal visible={showClaimModal} transparent animationType="fade">
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.55)",
+            justifyContent: "center",
+            padding: 18,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: theme.card,
+              borderRadius: 18,
+              padding: 16,
+              gap: 10,
+              borderWidth: 1,
+              borderColor: theme.border,
+            }}
+          >
+            <Text style={{ fontSize: 18, fontWeight: "900", color: theme.text }}>
+              Claim draw
+            </Text>
+
+            {drawClaimOptions.length === 0 ? (
+              <Text style={{ color: theme.subtext, fontWeight: "700" }}>
+                No claimable draw conditions in the current position.
+              </Text>
+            ) : (
+              drawClaimOptions.map((opt) => (
+                <Pressable
+                  key={opt.reason}
+                  onPress={() => onClaimDraw(opt.reason, opt.label)}
+                  disabled={!!busy.claimDraw}
+                  style={({ pressed }) => [
+                    {
+                      borderRadius: 14,
+                      borderWidth: 1,
+                      borderColor: theme.border,
+                      backgroundColor: theme.card,
+                      paddingVertical: 10,
+                      paddingHorizontal: 12,
+                      opacity: busy.claimDraw ? 0.55 : 1,
+                    },
+                    pressed && !busy.claimDraw
+                      ? { transform: [{ scale: 0.99 }], opacity: 0.96 }
+                      : null,
+                  ]}
+                >
+                  <Text style={{ color: theme.text, fontWeight: "900" }}>
+                    {opt.label}
+                  </Text>
+                  <Text
+                    style={{
+                      marginTop: 2,
+                      color: theme.subtext,
+                      fontWeight: "700",
+                      fontSize: 12,
+                    }}
+                  >
+                    {opt.detail}
+                  </Text>
+                </Pressable>
+              ))
+            )}
+
+            <Pressable
+              onPress={() => setShowClaimModal(false)}
+              disabled={!!busy.claimDraw}
+              style={({ pressed }) => [
+                {
+                  paddingVertical: 12,
+                  borderRadius: 16,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  backgroundColor: theme.card,
+                  opacity: busy.claimDraw ? 0.55 : 1,
+                },
+                pressed && !busy.claimDraw
+                  ? { transform: [{ scale: 0.99 }], opacity: 0.97 }
+                  : null,
+              ]}
+            >
+              <Text style={{ color: theme.text, fontWeight: "900" }}>Close</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
       {/* Rematch Modal */}
       <Modal transparent animationType="fade" visible={showRematch}>
         <View style={styles.overlay}>
@@ -1259,11 +1605,17 @@ export default function GameScreen() {
                 fontSize: 16,
               }}
             >
-              Rematch?
+              Play another game with the same opponent?
             </Text>
 
             <View style={styles.actions}>
-              <Pressable onPress={() => setShowRematch(false)}>
+              <Pressable
+                onPress={async () => {
+                  setShowRematch(false);
+                  await maybeShowInterstitial(isPaidSubscriber);
+                  router.replace("/(tabs)");
+                }}
+              >
                 <Text
                   style={{
                     color: theme.subtext,
@@ -1271,7 +1623,7 @@ export default function GameScreen() {
                     fontSize: 16,
                   }}
                 >
-                  No
+                  Back to Lobby
                 </Text>
               </Pressable>
 

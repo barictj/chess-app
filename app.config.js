@@ -2,8 +2,8 @@ export default {
   expo: {
     name: "dotChess",
     slug: "chessapp",
-    version: "1.0.16",
-    runtimeVersion: "1.0.16",
+    version: "1.0.17",
+    runtimeVersion: "1.0.17",
     orientation: "portrait",
     icon: "./assets/images/logo.png",
     scheme: "dotchess",
@@ -22,7 +22,6 @@ export default {
     },
     android: {
       package: "com.dotreduce.chessapp",
-      versionCode: 9,
       intentFilters: [
         {
           action: "VIEW",
@@ -98,5 +97,11 @@ export default {
     },
 
     assetBundlePatterns: ["**/*"],
+
+    extra: {
+      eas: {
+        projectId: "42242422-69e6-40eb-9519-30c56da02f5e",
+      },
+    },
   },
 };

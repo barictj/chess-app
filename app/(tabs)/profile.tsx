@@ -258,6 +258,20 @@ export default function ProfileScreen() {
         </View>
       </View>
 
+      <View
+        style={[
+          styles.card,
+          { backgroundColor: theme.card, borderColor: theme.border },
+        ]}
+      >
+        <Text style={[styles.rowText, { color: theme.text }]}>Ads</Text>
+        <Text style={{ marginTop: 6, color: theme.subtext, fontWeight: "700" }}>
+          {profile?.paid_subscriber
+            ? "Ad-free mode is active for your subscription."
+            : "No ads for paid subscribers coming soon. This will auto-enable once you subscribe."}
+        </Text>
+      </View>
+
       {/* Appearance */}
       <Text style={[styles.sectionTitle, { color: theme.text }]}>
         Appearance

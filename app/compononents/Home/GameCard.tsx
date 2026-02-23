@@ -1,7 +1,9 @@
 import React from "react";
 import { View, Text, Pressable, StyleSheet, Platform } from "react-native";
-import { useTheme } from "../../../lib/ThemeContext";
 import Chessboard from "dawikk-chessboard";
+import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "../../../lib/ThemeContext";
+
 type Props = {
   game: any;
   myUserId: number;
@@ -9,7 +11,7 @@ type Props = {
 };
 
 function sinceShort(ts?: string) {
-  if (!ts) return "—";
+  if (!ts) return "--";
   const diffMs = Date.now() - new Date(ts).getTime();
   const mins = Math.floor(diffMs / 60000);
   if (mins < 1) return "now";
@@ -27,21 +29,20 @@ export default function GameCard({ game, myUserId, onPress }: Props) {
     if (typeof f !== "string") return START_FEN;
     const s = f.trim();
     if (!s) return START_FEN;
-    if (s === "startpos" || s === "start") return START_FEN; // ✅ your case
-    // super cheap “looks like fen” check: must have at least 4 space-separated fields
+    if (s === "startpos" || s === "start") return START_FEN;
     if (s.split(" ").length < 4) return START_FEN;
     return s;
   }
 
   const fen = normalizeFen(game.fen ?? game.current_fen ?? game.position_fen);
-
   const myTurn = game.to_move_user_id === myUserId;
+  const iAmWhite = game.white_user_id === myUserId;
 
-  const opponent = game.opponent_username ?? "—";
-  const status = (game.status ?? "").toUpperCase();
-  const last = sinceShort(game.last_move_at);
+  const opponent = game.opponent_username ?? "--";
+  const last = sinceShort(game.last_move_at ?? game.created_at);
 
   const { theme, boardTheme } = useTheme();
+
   return (
     <Pressable
       onPress={onPress}
@@ -49,14 +50,11 @@ export default function GameCard({ game, myUserId, onPress }: Props) {
         styles.card,
         {
           backgroundColor: theme.card,
-          borderColor: theme.border,
+          borderColor: myTurn ? "rgba(47,107,255,0.45)" : theme.border,
         },
         pressed && styles.pressed,
-        myTurn && { borderColor: "rgba(47,107,255,0.45)" },
       ]}
     >
-      {/* LEFT: mini chessboard */}
-
       <View style={styles.miniBoard}>
         <Chessboard
           fen={fen}
@@ -64,7 +62,7 @@ export default function GameCard({ game, myUserId, onPress }: Props) {
           readonly
           showCoordinates={false}
           showArrows={false}
-          perspective={myTurn ? "white" : "black"}
+          perspective={iAmWhite ? "white" : "black"}
           onMove={() => {}}
           highlightedSquares={[
             {
@@ -81,23 +79,19 @@ export default function GameCard({ game, myUserId, onPress }: Props) {
         />
       </View>
 
-      {/* MIDDLE: opponent + meta */}
-      <View style={{ flex: 1, minWidth: 0 }}>
+      <View style={{ flex: 1, minWidth: 0, paddingVertical: 10 }}>
         <View style={styles.topRow}>
-          <Text
-            numberOfLines={1}
-            style={[styles.opponent, { color: theme.text }]}
-          >
+          <Text numberOfLines={1} style={[styles.opponent, { color: theme.text }]}>
             {opponent}
           </Text>
+          <Text style={[styles.time, { color: theme.subtext }]}>{last}</Text>
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontWeight: "800" }}>
-            Record: {game.opponent_stats?.stats?.wins ?? 0}-
-            {game.opponent_stats?.stats?.losses ?? 0}-
-            {game.opponent_stats?.stats?.draws ?? 0}D
-          </Text>
-        </View>
+
+        <Text style={[styles.record, { color: theme.subtext }]}>
+          Record: {game.opponent_stats?.stats?.wins ?? 0}W/
+          {game.opponent_stats?.stats?.losses ?? 0}L/
+          {game.opponent_stats?.stats?.draws ?? 0}D
+        </Text>
 
         <View style={styles.bottomRow}>
           {myTurn ? (
@@ -105,28 +99,15 @@ export default function GameCard({ game, myUserId, onPress }: Props) {
               <Text style={styles.pillText}>YOUR TURN</Text>
             </View>
           ) : (
-            <View style={[{ borderColor: theme.border }]}>
-              <Text style={[styles.pillText, { color: theme.subtext }]}>
-                Waiting on opponent
-              </Text>
+            <View style={[styles.pill, { borderColor: theme.border }]}>
+              <Text style={[styles.pillText, { color: theme.subtext }]}>Waiting</Text>
             </View>
           )}
         </View>
-        <View style={{ marginTop: 12 }}>
-          <Text style={[styles.time, { color: theme.subtext }]}>{last}</Text>
-        </View>
       </View>
 
-      {/* RIGHT: chevron */}
-      <View
-        style={{
-          flex: 1,
-          justifyContent: "center",
-          alignItems: "center",
-          flexDirection: "column",
-        }}
-      >
-        <Text style={[styles.chev, { color: theme.subtext }]}>›</Text>
+      <View style={styles.chevWrap}>
+        <Ionicons name="chevron-forward" size={18} color={theme.subtext} />
       </View>
     </Pressable>
   );
@@ -136,11 +117,10 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: "row",
     alignItems: "stretch",
-    paddingVertical: 0,
-    paddingHorizontal: 0,
     marginTop: 10,
     borderWidth: 1,
     borderRadius: 16,
+    overflow: "hidden",
     ...Platform.select({
       ios: {
         shadowColor: "#000",
@@ -151,57 +131,60 @@ const styles = StyleSheet.create({
       android: { elevation: 2 },
     }),
   },
+
   pressed: { transform: [{ scale: 0.995 }], opacity: 0.98 },
 
   miniBoard: {
-    width: 150,
-    height: 150,
-    borderRadius: 14,
+    width: 124,
+    height: 124,
     overflow: "hidden",
-    marginRight: 2,
   },
 
   topRow: {
     flexDirection: "row",
     alignItems: "baseline",
     justifyContent: "space-between",
-    gap: 2,
-    marginTop: 18,
-    marginBottom: 10,
+    gap: 6,
+    marginBottom: 8,
+    paddingHorizontal: 10,
   },
-  opponent: { fontSize: 15, fontWeight: "900" },
-  time: { fontSize: 15, fontWeight: "800" },
+
+  opponent: { fontSize: 15, fontWeight: "900", flex: 1 },
+  time: { fontSize: 12, fontWeight: "800" },
+  record: { fontSize: 12, fontWeight: "700", paddingHorizontal: 10 },
 
   bottomRow: {
     marginTop: 10,
     flexDirection: "row",
     alignItems: "center",
-    gap: 2,
-    marginBottom: 10,
+    paddingHorizontal: 10,
   },
 
   pill: {
     paddingVertical: 4,
-    paddingHorizontal: 4,
+    paddingHorizontal: 8,
     borderRadius: 999,
     borderWidth: 1,
-
-    alignItems: "center", // 👈 horizontal
-    justifyContent: "center", // 👈 vertical
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   pillTurn: {
     backgroundColor: "#2F6BFF",
     borderColor: "#2F6BFF",
   },
+
   pillText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "900",
     letterSpacing: 0.3,
     color: "#fff",
     textAlign: "center",
   },
 
-  sub: { flex: 1, fontSize: 12, fontWeight: "800" },
-  chev: { marginLeft: 10, fontSize: 25, fontWeight: "900", marginRight: 0 },
+  chevWrap: {
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 8,
+  },
 });
