@@ -1,17 +1,21 @@
 export default {
   expo: {
-    name: "chessapp",
-    slug: "chessapp",
-    version: "1.0.0",
+    name: "dotChess",
+    slug: "chessapp2",
+    version: "1.0.22",
+    runtimeVersion: "1.0.22",
     orientation: "portrait",
-    icon: "./assets/images/icon.png",
-    scheme: "chessapp",
+    icon: "./assets/images/logo.png",
+    scheme: "dotchess",
     userInterfaceStyle: "automatic",
 
     ios: {
-      supportsTablet: true,
-      bundleIdentifier: "com.dotreduce.chessapp",
+      supportsTablet: false,
+      appleTeamId: "97L92C7YW7",
+      bundleIdentifier: "com.dotreduce.chessapp.ios",
+      usesAppleSignIn: true,
       infoPlist: {
+        ITSAppUsesNonExemptEncryption: false,
         NSCameraUsageDescription:
           "This app uses the camera for profile pictures.",
         NSPhotoLibraryUsageDescription:
@@ -20,7 +24,14 @@ export default {
     },
 
     android: {
-      package: "com.yourname.chessappmobile",
+      package: "com.dotreduce.chessapp",
+      intentFilters: [
+        {
+          action: "VIEW",
+          data: [{ scheme: "dotchess", host: "login" }],
+          category: ["BROWSABLE", "DEFAULT"],
+        },
+      ],
       adaptiveIcon: {
         backgroundColor: "#E6F4FE",
         foregroundImage: "./assets/images/android-icon-foreground.png",
@@ -31,8 +42,7 @@ export default {
         "INTERNET",
         "ACCESS_NETWORK_STATE",
         "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
+        "com.google.android.gms.permission.AD_ID",
       ],
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
@@ -44,6 +54,7 @@ export default {
 
     plugins: [
       "expo-router",
+      "./plugins/withPhoneOnlyAndroid",
       [
         "expo-splash-screen",
         {
@@ -61,6 +72,9 @@ export default {
           android: {
             compileSdkVersion: 36,
             targetSdkVersion: 36,
+            gradleProperties: {
+              "org.gradle.jvmargs": "-Xmx6g -XX:MaxMetaspaceSize=1g",
+            },
           },
         },
       ],
@@ -74,6 +88,7 @@ export default {
     },
 
     updates: {
+      url: "https://u.expo.dev/bd61f132-2f81-4d24-b00e-2b50274c5c5b",
       fallbackToCacheTimeout: 0,
     },
 
@@ -81,9 +96,10 @@ export default {
 
     extra: {
       eas: {
-        projectId: "42242422-69e6-40eb-9519-30c56da02f5e",
+        projectId: "bd61f132-2f81-4d24-b00e-2b50274c5c5b",
       },
-      BACKEND_URL: process.env.EXPO_PUBLIC_BACKEND_URL,
+      router: {},
     },
+    owner: "barictj",
   },
 };

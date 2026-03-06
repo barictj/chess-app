@@ -1,12 +1,16 @@
 import Constants from "expo-constants";
-import { getToken } from "./token";
+import { clearToken, getToken } from "./token";
+import { authedFetch as baseAuthedFetch } from "./authedFetch";
 
 const BACKEND_URL = Constants.expoConfig?.extra?.BACKEND_URL;
+async function authedFetch(token: string, input: string, init: RequestInit = {}) {
+  return baseAuthedFetch(token, input, init, { clearTokenImpl: clearToken });
+}
 
 export async function createGame(opponentUsername: string) {
   const token = await getToken();
   if (!token) throw new Error("Not authenticated");
-  const res = await fetch(`${BACKEND_URL}/api/games`, {
+  const res = await authedFetch(token, `${BACKEND_URL}/api/games`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -25,7 +29,7 @@ export async function createGame(opponentUsername: string) {
 export async function createInvitedGame(opponent_username: string) {
   const token = await getToken();
   if (!token) throw new Error("Not authenticated");
-  const res = await fetch(`${BACKEND_URL}/api/games/invite`, {
+  const res = await authedFetch(token, `${BACKEND_URL}/api/games/invite`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -44,7 +48,7 @@ export async function getGameInvites() {
   console.log("Fetching game invites...");
   const token = await getToken();
   if (!token) throw new Error("Not authenticated");
-  const res = await fetch(`${BACKEND_URL}/api/games/invites`, {
+  const res = await authedFetch(token, `${BACKEND_URL}/api/games/invites`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -59,7 +63,7 @@ export async function getGameInvites() {
 export async function acceptInvitedGame(gameId: string) {
   const token = await getToken();
   if (!token) throw new Error("Not authenticated");
-  const res = await fetch(`${BACKEND_URL}/api/games/${gameId}/accept`, {
+  const res = await authedFetch(token, `${BACKEND_URL}/api/games/${gameId}/accept`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -77,7 +81,7 @@ export async function acceptInvitedGame(gameId: string) {
 export async function denyInvitedGame(gameId: string) {
   const token = await getToken();
   if (!token) throw new Error("Not authenticated");
-  const res = await fetch(`${BACKEND_URL}/api/games/${gameId}/deny`, {
+  const res = await authedFetch(token, `${BACKEND_URL}/api/games/${gameId}/deny`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -96,7 +100,7 @@ export async function getActiveGames() {
   const token = await getToken();
   if (!token) throw new Error("Not authenticated");
 
-  const res = await fetch(`${BACKEND_URL}/api/games/active`, {
+  const res = await authedFetch(token, `${BACKEND_URL}/api/games/active`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -110,7 +114,7 @@ export async function getActiveGames() {
 export async function findRandomGame() {
   const token = await getToken();
   if (!token) throw new Error("Not authenticated");
-  const res = await fetch(`${BACKEND_URL}/api/games/random`, {
+  const res = await authedFetch(token, `${BACKEND_URL}/api/games/random`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -128,7 +132,7 @@ export async function findRandomGame() {
 export async function getUserProfile() {
   const token = await getToken();
   if (!token) throw new Error("Not authenticated");
-  const res = await fetch(`${BACKEND_URL}/api/users/user_profile`, {
+  const res = await authedFetch(token, `${BACKEND_URL}/api/users/user_profile`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -142,7 +146,7 @@ export async function getUserProfile() {
 export async function setUsername(username: string) {
   const token = await getToken();
   if (!token) throw new Error("Not authenticated");
-  const res = await fetch(`${BACKEND_URL}/api/users/set_username`, {
+  const res = await authedFetch(token, `${BACKEND_URL}/api/users/set_username`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -157,7 +161,7 @@ export async function setUsername(username: string) {
 export async function playAgainstBot() {
   const token = await getToken();
   if (!token) throw new Error("Not authenticated");
-  const res = await fetch(`${BACKEND_URL}/api/games/play_bot`, {
+  const res = await authedFetch(token, `${BACKEND_URL}/api/games/play_bot`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -173,7 +177,7 @@ export async function playAgainstBot() {
 export async function resignGame(gameId: string) {
   const token = await getToken();
   if (!token) throw new Error("Not authenticated");
-  const res = await fetch(`${BACKEND_URL}/api/games/${gameId}/resign`, {
+  const res = await authedFetch(token, `${BACKEND_URL}/api/games/${gameId}/resign`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -190,7 +194,7 @@ export async function resignGame(gameId: string) {
 export async function rematchGame(gameId: string) {
   const token = await getToken();
   if (!token) throw new Error("Not authenticated");
-  const res = await fetch(`${BACKEND_URL}/api/games/${gameId}/rematch`, {
+  const res = await authedFetch(token, `${BACKEND_URL}/api/games/${gameId}/rematch`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -207,7 +211,7 @@ export async function rematchGame(gameId: string) {
 export async function offerDraw(gameId: string) {
   const token = await getToken();
   if (!token) throw new Error("Not authenticated");
-  const res = await fetch(`${BACKEND_URL}/api/games/${gameId}/draw/offer`, {
+  const res = await authedFetch(token, `${BACKEND_URL}/api/games/${gameId}/draw/offer`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -225,7 +229,7 @@ export async function respondToDrawOffer(gameId: string, accept: boolean) {
   const token = await getToken();
   if (!token) throw new Error("Not authenticated");
   if (accept) {
-    const res = await fetch(`${BACKEND_URL}/api/games/${gameId}/draw/accept`, {
+    const res = await authedFetch(token, `${BACKEND_URL}/api/games/${gameId}/draw/accept`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -239,7 +243,7 @@ export async function respondToDrawOffer(gameId: string, accept: boolean) {
     }
     return res.json();
   } else {
-    const res = await fetch(`${BACKEND_URL}/api/games/${gameId}/draw/deny`, {
+    const res = await authedFetch(token, `${BACKEND_URL}/api/games/${gameId}/draw/deny`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -257,7 +261,7 @@ export async function respondToDrawOffer(gameId: string, accept: boolean) {
 export async function requestFriend(friendUsername: string) {
   const token = await getToken();
   if (!token) throw new Error("Not authenticated");
-  const res = await fetch(`${BACKEND_URL}/api/friends/request`, {
+  const res = await authedFetch(token, `${BACKEND_URL}/api/friends/request`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -274,7 +278,7 @@ export async function requestFriend(friendUsername: string) {
 export async function getFriendsList() {
   const token = await getToken();
   if (!token) throw new Error("Not authenticated");
-  const res = await fetch(`${BACKEND_URL}/api/friends`, {
+  const res = await authedFetch(token, `${BACKEND_URL}/api/friends`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -286,7 +290,7 @@ export async function getFriendsList() {
 export async function acceptFriendRequest(fromUserId: number) {
   const token = await getToken();
   if (!token) throw new Error("Not authenticated");
-  const res = await fetch(`${BACKEND_URL}/api/friends/accept`, {
+  const res = await authedFetch(token, `${BACKEND_URL}/api/friends/accept`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -305,7 +309,7 @@ export async function denyFriendRequest(fromUserId: number) {
   console.log("Denying friend request from user ID:", fromUserId);
   const token = await getToken();
   if (!token) throw new Error("Not authenticated");
-  const res = await fetch(`${BACKEND_URL}/api/friends/deny`, {
+  const res = await authedFetch(token, `${BACKEND_URL}/api/friends/deny`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -323,7 +327,7 @@ export async function denyFriendRequest(fromUserId: number) {
 export async function blockUser(user_id: string) {
   const token = await getToken();
   if (!token) throw new Error("Not authenticated");
-  const res = await fetch(`${BACKEND_URL}/api/friends/block`, {
+  const res = await authedFetch(token, `${BACKEND_URL}/api/friends/block`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -340,7 +344,7 @@ export async function blockUser(user_id: string) {
 export async function unblockUser(user_id: string) {
   const token = await getToken();
   if (!token) throw new Error("Not authenticated");
-  const res = await fetch(`${BACKEND_URL}/api/friends/unblock`, {
+  const res = await authedFetch(token, `${BACKEND_URL}/api/friends/unblock`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -357,7 +361,7 @@ export async function unblockUser(user_id: string) {
 export async function getIncomingFriendRequests() {
   const token = await getToken();
   if (!token) throw new Error("Not authenticated");
-  const res = await fetch(`${BACKEND_URL}/api/friends/requests/incoming`, {
+  const res = await authedFetch(token, `${BACKEND_URL}/api/friends/requests/incoming`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -369,7 +373,7 @@ export async function getIncomingFriendRequests() {
 export async function getOutgoingFriendRequests() {
   const token = await getToken();
   if (!token) throw new Error("Not authenticated");
-  const res = await fetch(`${BACKEND_URL}/api/friends/requests/outgoing`, {
+  const res = await authedFetch(token, `${BACKEND_URL}/api/friends/requests/outgoing`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -382,7 +386,7 @@ export async function getOutgoingFriendRequests() {
 export async function deleteUserAccount() {
   const token = await getToken();
   if (!token) throw new Error("Not authenticated");
-  const res = await fetch(`${BACKEND_URL}/api/users/delete_account`, {
+  const res = await authedFetch(token, `${BACKEND_URL}/api/users/delete_account`, {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -397,7 +401,7 @@ export async function getUserAvatarUrl(userId: number) {
   console.log("Fetching avatar URL for user ID:", userId);
   const token = await getToken();
   if (!token) throw new Error("Not authenticated");
-  const res = await fetch(
+  const res = await authedFetch(token, 
     `${BACKEND_URL}/api/users/user_avatar_url/${userId}`,
     {
       method: "GET",
@@ -415,7 +419,7 @@ export async function getUserAvatarUrl(userId: number) {
 export async function setUserAvatarUrl(avatarUrl: string) {
   const token = await getToken();
   if (!token) throw new Error("Not authenticated");
-  const res = await fetch(`${BACKEND_URL}/api/users/set_avatar_url`, {
+  const res = await authedFetch(token, `${BACKEND_URL}/api/users/set_avatar_url`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
