@@ -22,6 +22,7 @@ import {
   deleteUserAccount,
   setUserAvatarUrl,
 } from "../../lib/api";
+import { INVALID_TOKEN_ERROR } from "../../lib/authedFetch";
 import { confirm } from "../compononents/Shared/Confirm";
 import { useTheme } from "../../lib/ThemeContext";
 import { boardThemes } from "../../lib/boards";
@@ -48,9 +49,14 @@ export default function ProfileScreen() {
       const prof = await getUserProfile();
       setProfileS({ status: "ready", data: prof, error: null });
     } catch (e) {
-      setProfileS({ status: "error", data: null, error: msg(e) });
+      const m = msg(e);
+      if (m === INVALID_TOKEN_ERROR) {
+        router.replace("/(auth)/login");
+        return;
+      }
+      setProfileS({ status: "error", data: null, error: m });
     }
-  }, []);
+  }, [router]);
 
   useFocusEffect(
     useCallback(() => {

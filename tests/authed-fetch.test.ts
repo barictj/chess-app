@@ -28,7 +28,7 @@ test("authedFetch clears token and throws on invalid token response", async () =
   assert.equal(cleared, true);
 });
 
-test("authedFetch does not clear token for non-invalid 401", async () => {
+test("authedFetch does not clear token for unrelated 401", async () => {
   let cleared = false;
 
   const response = await authedFetch(
@@ -36,7 +36,7 @@ test("authedFetch does not clear token for non-invalid 401", async () => {
     "https://example.com/api",
     {},
     {
-      fetchImpl: async () => new Response("Unauthorized", { status: 401 }),
+      fetchImpl: async () => new Response("rate limited", { status: 401 }),
       clearTokenImpl: async () => {
         cleared = true;
       },
@@ -45,4 +45,46 @@ test("authedFetch does not clear token for non-invalid 401", async () => {
 
   assert.equal(response.status, 401);
   assert.equal(cleared, false);
+});
+
+test("authedFetch clears token on user not found 401", async () => {
+  let cleared = false;
+
+  await assert.rejects(
+    authedFetch(
+      "abc",
+      "https://example.com/api",
+      {},
+      {
+        fetchImpl: async () => new Response("User not found", { status: 401 }),
+        clearTokenImpl: async () => {
+          cleared = true;
+        },
+      },
+    ),
+    new Error(INVALID_TOKEN_ERROR),
+  );
+
+  assert.equal(cleared, true);
+});
+
+test("authedFetch clears token on unauthorized 403", async () => {
+  let cleared = false;
+
+  await assert.rejects(
+    authedFetch(
+      "abc",
+      "https://example.com/api",
+      {},
+      {
+        fetchImpl: async () => new Response("Unauthorized", { status: 403 }),
+        clearTokenImpl: async () => {
+          cleared = true;
+        },
+      },
+    ),
+    new Error(INVALID_TOKEN_ERROR),
+  );
+
+  assert.equal(cleared, true);
 });

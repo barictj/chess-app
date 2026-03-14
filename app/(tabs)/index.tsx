@@ -25,6 +25,7 @@ import {
   denyInvitedGame,
   getActiveGames,
 } from "../../lib/api";
+import { INVALID_TOKEN_ERROR } from "../../lib/authedFetch";
 
 import InviteCard from "../compononents/Home/InviteCard";
 import GameCard from "../compononents/Home/GameCard";
@@ -176,6 +177,10 @@ export default function Lobby() {
       if (prof?.username_set === 0) router.replace("/set-username");
     } catch (e) {
       const m = msg(e);
+      if (m === INVALID_TOKEN_ERROR) {
+        router.replace("/(auth)/login");
+        return;
+      }
       setProfileS({ status: "error", data: null, error: m });
       setInvitesS((s) => ({ status: "error", data: s.data, error: m }) as any);
       setGamesS((s) => ({ status: "error", data: s.data, error: m }) as any);

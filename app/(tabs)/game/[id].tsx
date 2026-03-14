@@ -13,7 +13,7 @@ import { router } from "expo-router";
 import Constants from "expo-constants";
 import { Chess } from "chess.js";
 import { useTheme } from "../../../lib/ThemeContext";
-import { getToken } from "../../../lib/token";
+import { clearToken, getToken } from "../../../lib/token";
 import { getUserIdFromToken } from "../../../lib/auth";
 import {
   resignGame,
@@ -33,6 +33,7 @@ import { confirm } from "../../compononents/Shared/Confirm";
 
 import { LoadState, msg } from "../../../lib/loadState";
 import { ErrorBanner, SkeletonRow } from "../../compononents/Shared/States";
+import { INVALID_TOKEN_ERROR } from "../../../lib/authedFetch";
 
 const BACKEND_URL = Constants.expoConfig?.extra?.BACKEND_URL;
 
@@ -68,6 +69,23 @@ export default function GameScreen() {
   const lastSeenFenRef = React.useRef<string | null>(null);
   const sendingRef = React.useRef(false);
   const rematchPromptedRef = React.useRef(false);
+  const handleAuthError = React.useCallback(async () => {
+    await clearToken();
+    router.replace("/(auth)/login");
+  }, []);
+  const isAuthResponse = React.useCallback((status: number, text: string) => {
+    if (status !== 401 && status !== 403) return false;
+    return /invalid token|user not found|no token provided|unauthorized/i.test(
+      text,
+    );
+  }, []);
+  const friendlyMsg = React.useCallback((e: any) => {
+    const m = msg(e);
+    if (m === INVALID_TOKEN_ERROR || /invalid token/i.test(m)) {
+      return "Session expired. Please sign in again.";
+    }
+    return m;
+  }, []);
 
   // ---- busy flags for mutations
   const [busy, setBusy] = React.useState<{
@@ -161,6 +179,10 @@ export default function GameScreen() {
     });
 
     const text = await res.text();
+    if (isAuthResponse(res.status, text)) {
+      await handleAuthError();
+      throw new Error(INVALID_TOKEN_ERROR);
+    }
     if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
 
     const g = JSON.parse(text);
@@ -179,13 +201,13 @@ export default function GameScreen() {
     }
 
     return g;
-  }, [id]);
+  }, [handleAuthError, id, isAuthResponse]);
 
   React.useEffect(() => {
     loadGame().catch((e) =>
-      setGameS({ status: "error", data: null, error: msg(e) }),
+      setGameS({ status: "error", data: null, error: friendlyMsg(e) }),
     );
-  }, [loadGame]);
+  }, [friendlyMsg, loadGame]);
 
   // ---- send move
   async function sendMove(from: string, to: string, promotion?: string) {
@@ -211,6 +233,10 @@ export default function GameScreen() {
       });
 
       const text = await res.text();
+      if (isAuthResponse(res.status, text)) {
+        await handleAuthError();
+        throw new Error(INVALID_TOKEN_ERROR);
+      }
       if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
 
       const data = JSON.parse(text);
@@ -241,7 +267,7 @@ export default function GameScreen() {
       }
     } catch (e) {
       setGameS(
-        (s) => ({ status: "error", data: s.data, error: msg(e) }) as any,
+        (s) => ({ status: "error", data: s.data, error: friendlyMsg(e) }) as any,
       );
     } finally {
       sendingRef.current = false;
@@ -264,7 +290,7 @@ export default function GameScreen() {
       await loadGame();
     } catch (e) {
       setGameS(
-        (s) => ({ status: "error", data: s.data, error: msg(e) }) as any,
+        (s) => ({ status: "error", data: s.data, error: friendlyMsg(e) }) as any,
       );
     } finally {
       setBusy((b) => ({ ...b, resign: false }));
@@ -278,7 +304,7 @@ export default function GameScreen() {
       router.replace(`/game/${newGame.id}`);
     } catch (e) {
       setGameS(
-        (s) => ({ status: "error", data: s.data, error: msg(e) }) as any,
+        (s) => ({ status: "error", data: s.data, error: friendlyMsg(e) }) as any,
       );
     } finally {
       setBusy((b) => ({ ...b, rematch: false }));
@@ -293,7 +319,7 @@ export default function GameScreen() {
       await loadGame();
     } catch (e) {
       setGameS(
-        (s) => ({ status: "error", data: s.data, error: msg(e) }) as any,
+        (s) => ({ status: "error", data: s.data, error: friendlyMsg(e) }) as any,
       );
     } finally {
       setBusy((b) => ({ ...b, offerDraw: false }));
@@ -337,6 +363,10 @@ export default function GameScreen() {
           });
 
           const text = await res.text();
+          if (isAuthResponse(res.status, text)) {
+            await handleAuthError();
+            return;
+          }
           if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
 
           const fresh = JSON.parse(text);
@@ -367,7 +397,7 @@ export default function GameScreen() {
             }));
           }
         } catch (e) {
-          console.log("poll error:", msg(e));
+          console.log("poll error:", friendlyMsg(e));
         } finally {
           if (!alive) return;
           timer = setTimeout(poll, 5000);
@@ -381,7 +411,7 @@ export default function GameScreen() {
         alive = false;
         if (timer) clearTimeout(timer);
       };
-    }, [id, game]),
+    }, [game, handleAuthError, id, isAuthResponse, friendlyMsg]),
   );
 
   // ---- derived values
